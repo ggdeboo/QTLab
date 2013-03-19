@@ -32,7 +32,7 @@ from lib.misc import exact_time, get_ipython
 from lib import temp
 from time import sleep
 
-#set_debug(True)
+set_debug(True)
 from lib.network import object_sharer as objsh
 objsh.root.set_instance_name(_cfg.get('instance_name', ''))
 objsh.start_glibtcp_server(port=_cfg.get('port', objsh.PORT))
