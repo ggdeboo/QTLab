@@ -766,7 +766,9 @@ class PythonInterpreter(SharedObject):
             ip = IPython.core.ipapi.get()
         except:
             ip = IPython.ipapi.get()
-        ip.IP.code_queue.put((c, cev, rev))
+        ip.runcode(c) #Sam Hile and Sam Gorman - Not sure of implications for rest of operation.
+                      #Allows use of reaminder of program while measurement is taking place.
+        #ip.IP.code_queue.put((c, cev, rev))
 
 class _DummyHandler(tcpserver.GlibTCPHandler):
 
