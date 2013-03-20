@@ -1,0 +1,9 @@
+001: ip.IP.code_queue
+Queue behaviour changed to just running
+This means that other commands do not work such as abort
+
+Fix: # TODO
+We will implement another queue using the python Queue class
+And somehow teach IPython to run this queue.
+
+Maybe look at https://github.com/ipython/ipython/blob/master/IPython/deathrow/twshell.py
