@@ -1,3 +1,4 @@
 Add Instrument Drivers
 Implement New Classes
 Develop New UI
+Set up git mailer (this is now a test)
