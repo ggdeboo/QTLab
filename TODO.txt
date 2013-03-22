@@ -1,10 +1,20 @@
+###New Bits:
 Add Instrument Drivers
+ ASAP:
+  AMI Magnet
+  Cryocon Temp Controller
+ Later:
+  Keithly SMU
+  Complete Yoko
+  
 Implement New Classes
 Develop New UI
+
 Set up git mailer (this is now a test)
 
+###Fixes:
+Add GPIB address to the add instrument window?
+Units problem with frontpanel
+Figure out whats wrong with 'Watch'
 
 Test out Virtual Instruments and do we need a GUI?
-Also add GPIB address to the add instrument window?
-
-Units problem with frontpanel

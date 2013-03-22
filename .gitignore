@@ -2,3 +2,6 @@
 *.log
 qtlab.bat
 qtlabgui.cfg
+*.cfg
+*.lock
+*.bak
