@@ -2,3 +2,9 @@ Add Instrument Drivers
 Implement New Classes
 Develop New UI
 Set up git mailer (this is now a test)
+
+
+Test out Virtual Instruments and do we need a GUI?
+Also add GPIB address to the add instrument window?
+
+Units problem with frontpanel

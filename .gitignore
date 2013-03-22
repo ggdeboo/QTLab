@@ -1,3 +1,4 @@
 *.py[cod]
 *.log
-
+qtlab.bat
+qtlabgui.cfg
