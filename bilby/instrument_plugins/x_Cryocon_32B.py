@@ -1,7 +1,8 @@
-# Cryocon32B.py class, to perform the communication between the Wrapper and the device
+# Cryocon_32B.py class, to perform the communication between the Wrapper and the device
 # Pieter de Groot <pieterdegroot@gmail.com>, 2008
 # Martijn Schaafsma <mcschaafsma@gmail.com>, 2008
 # Sam Gorman <samuel.gorman@student.unsw.edu.au>, 2013
+# Sam Hile <samhile@gmail.com> 2013
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -22,7 +23,8 @@ import types
 import visa
 from time import sleep
 import logging
-#NOT CURRENTLY WORKING
+import re
+
 class x_Cryocon_32B(Instrument):
     '''
     This is the python driver for the Cryocon62
@@ -76,12 +78,8 @@ class x_Cryocon_32B(Instrument):
         self.add_parameter('channel_name', type=types.StringType,
             channel_prefix='ch%d_',
             flags=Instrument.FLAG_GET, channels=(1,2))
-        self.add_parameter('sensor_name', type=types.StringType,
-            channel_prefix='ch%d_',
-            flags=Instrument.FLAG_GET, channels=(1,2))
         self.add_parameter('status', type=types.StringType,
-            channel_prefix='ch%d_',
-            flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET, channels=(1,2))
+            flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET)
 
             
         self.add_function('reset')
@@ -120,15 +118,20 @@ class x_Cryocon_32B(Instrument):
             None
         '''
         logging.info(__name__ + ' : reading all settings from instrument')
+        self.get_ch1_temp_setpoint()
+        self.get_ch1_temperature()
+        self.get_ch1_units()
+        self.get_ch1_sensor_index()
+        self.get_ch1_vbias()
+        self.get_ch1_channel_name()
 
-
-        #self.get_temp_setpoint(channel)
-        #self.get_temperature(channel)
-        self.get_units()
-        self.get_sensor_index()
-        self.get_vbias()
-        self.get_channel_name()
-        self.get_sensor_name()
+        self.get_ch2_temp_setpoint()
+        self.get_ch2_temperature()
+        self.get_ch2_units()
+        self.get_ch2_sensor_index()
+        self.get_ch2_vbias()
+        self.get_ch2_channel_name()
+        
         self.get_status()
         
 
@@ -140,7 +143,7 @@ class x_Cryocon_32B(Instrument):
             channel (int) : 1 or 2, the number of the designated channel
 
         Output:
-            temperature (float) : Temperature in the specified units
+            temperature (float) : Temperature in Kelvin
         '''
         logging.debug(__name__ + ' : get temperature for channel %i' % channel)
         if (channel==1):
@@ -150,10 +153,10 @@ class x_Cryocon_32B(Instrument):
         else:
             return 'Channel does not exist'
 
-        # try:
-           # value = float(value)
-        # except ValueError:
-           # value = 0.0
+        try:
+            value = float(value)
+        except ValueError:
+            value = 0.0
         return value
         
     def do_get_temp_setpoint(self, channel):
@@ -164,13 +167,21 @@ class x_Cryocon_32B(Instrument):
             channel (int) : 1 or 2, the number of the designated channel
 
         Output:
-            temperature (float) : Temperature setpoint in the specified units
+            temperature (float) : Temperature setpoint in Kelvin
         '''
         
         logging.debug(__name__ + ' : get temperature of channel %i' % channel)
-        value = self._visainstrument.ask('LOOP %i:SETPT?' % (3 - channel))
+        str = self._visainstrument.ask('LOOP %i:SETPT?' % (3 - channel))
         #(3 - channel) is impleneted to change the LOOP channel from 1 to 2 and vice versa
-        #since the loop 2 is channel A and loop 1 is channel B
+        #since the loop 2 is set to channel A and loop 1 is channel B - Ask Giordy??
+        
+        try:
+            #dissect with regex
+            matchObj = re.search("(.+)([KCFS])",str) #extract value as string
+            assert matchObj.group(2) == "K"
+            value = float(matchObj.group(1))
+        except ValueError:
+            value = 0.0
         return value
     
     
@@ -180,7 +191,7 @@ class x_Cryocon_32B(Instrument):
 
         Input:
             channel (int) : 1 or 2, the number of the designated channel
-            val (float) : Temperature setpoint in the specified units
+            val (float) : Temperature setpoint in Kelvin
 
         Output:
             None
@@ -264,36 +275,17 @@ class x_Cryocon_32B(Instrument):
         else:
             raise ValueError('Channel %i does not exist' % channel)
 
-    def do_get_sensor_name(self, channel):
-        '''
-        Reads the name of the designated sensor from the device.
-
-        Input:
-            channel (int) : 1 or 2, the number of the designated sensor
-
-        Output:
-            name (string) : Name of the device
-        '''
-        if (channel==1):
-            sensor_index = self.get_ch1_sensor_index()
-            return self._visainstrument.ask('SENTYPE %i:NAME?' % sensor_index)
-        elif (channel==2):
-            sensor_index = self.get_ch2_sensor_index()
-            return self._visainstrument.ask('SENTYPE %i:NAME?' % sensor_index)
-        else:
-            raise ValueError('Channel %i does not exist' % channel)
-
-    def do_get_status(self, channel):
+    def do_get_status(self):
         '''
         Reads the status from the device for the specified channel
 
         Input:
-            channel (int) : 1 or 2, the number of the designated channel (default 1)
+            none
 
         Output:
             status (string) : 'on' or 'off'
         '''
-        logging.debug(__name__ + ' : getting status for channel %i' % (3 - channel))
+        logging.debug(__name__ + ' : getting status')
         val = self._visainstrument.ask('CONTROL?')
         if (val=='ON'):
             return 'on'
@@ -301,21 +293,21 @@ class x_Cryocon_32B(Instrument):
             return 'off'
         return 'error'
         
-    def do_set_status(self, val, channel):
+    def do_set_status(self, val):
         '''
         Sets the status of the specified channel
 
         Input:
             val (string)  : 'on' or 'off'
-            channel (int) : 1 or 2, the number of the designated channel (default 1)
 
         Output:
             None
         '''
-        logging.debug(__name__ + ' : setting status for channel %i to %e' % (channel, val))
+        logging.debug(__name__ + ' : setting status to %s' % val)
         if ((val.upper()=='ON') | (val.upper()=='OFF')):
-            logging.debug(__name__ + ' : setting status for channel %i to %e' % (channel, val))
-            self._visainstrument.write('CONTROL val.upper()')
+            self._visainstrument.write('CONTROL %s' % val.upper())
+        else:
+            logging.warning(__name__ + " : state value supplied is not 'ON' or 'OFF' - no action taken")
 
     def loop_off(self):
         '''
