@@ -15,12 +15,12 @@ config.remove([
             ])
 
 # QTLab instance name and port for networked operation
-config['instance_name'] = 'qtlab_??' # CHANGE ME
+config['instance_name'] = 'qtlab_VTI_LAB'
 config['port'] = 12002
 
 # A list of allowed IP ranges for remote connections
 config['allowed_ips'] = (
-    '129.94.141.*', # UNSW/PHYS PARTIAL SUBSET
+    '129.94.141.*',
 #    '129.94.*.*',
 )
 
@@ -28,10 +28,10 @@ config['allowed_ips'] = (
 config['instrument_server'] = False
 
 ## This sets a default location for data-storage
-config['datadir'] = 'd:/data' # CHECK/CHANGE ME, AND THE REST BELOW
+config['datadir'] = 'd:/data'
 
 ## This sets a default directory for qtlab to start in
-#config['startdir'] = 'd:/scripts'
+#config['startdir'] = 'd:/QTLab/bilby'
 
 ## A default script (or list of scripts) to run after qtlab started
 config['startscript'] = []      #e.g. 'initscript1.py'
@@ -42,14 +42,15 @@ config['exitscript'] = []       #e.g. ['closescript1.py', 'closescript2.py']
 # Add directories containing scripts here. All scripts will be added to the
 # global namespace as functions.
 config['scriptdirs'] = [
-        'examples/scripts',
-#        'd:/scripts',
+#        'examples/scripts',
+        'd:/QTLab/bilby/Roggelab_source',
+        'd:/QTLab/bilby/aff_scripts',
 ]
 
 ## This sets a user instrument directory
 ## Any instrument drivers placed here will take
 ## preference over the general instrument drivers
-#config['user_insdir'] = 'd:/instruments'
+config['user_insdir'] = 'd:/QTLab/bilby/instrument_plugins'
 
 ## For adding additional folders to the 'systm path'
 ## so python can find your modules
@@ -63,7 +64,7 @@ config['startgui'] = True
 # Default gnuplot terminal
 #config['gnuplot_terminal'] = 'x11'
 #config['gnuplot_terminal'] = 'wxt'
-#config['gnuplot_terminal'] = 'windows'
+config['gnuplot_terminal'] = 'windows'
 
 # Enter a filename here to log all IPython commands
-config['ipython_logfile'] = ''      #e.g. 'command.log'
+#config['ipython_logfile'] = ''      #e.g. 'command.log'
