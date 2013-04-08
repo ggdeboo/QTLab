@@ -1,4 +1,4 @@
-# Keithley_2000.py driver for Keithley 2000 DMM
+# Keithley_2001.py driver for Keithley 2001 Digital Multimeter
 # Pieter de Groot <pieterdegroot@gmail.com>, 2008
 # Martijn Schaafsma <qtlab@mcschaafsma.nl>, 2008
 # Reinier Heeres <reinier@heeres.eu>, 2008 - 2010
