@@ -5,3 +5,5 @@ qtlabgui.cfg
 *.cfg
 *.lock
 *.bak
+*.tmp
+meas[123456789]*
