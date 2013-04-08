@@ -135,7 +135,7 @@ class x_Cryocon_32B(Instrument):
         self.get_status()
         
 
-    def do_get_temperature(self, channel=1):
+    def do_get_temperature(self, channel):
         '''
         Reads the temperature of the designated channel from the device.
 
