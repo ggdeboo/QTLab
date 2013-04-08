@@ -69,7 +69,7 @@ class Instrument(SharedGObject):
     # FLAGS are used to to set extra properties on a parameter.
 
     FLAG_GET = 0x01             # Parameter is gettable
-    FLAG_SET = 0x02             # {arameter is settable
+    FLAG_SET = 0x02             # Parameter is settable
     FLAG_GETSET = 0x03          # Shortcut for GET and SET
     FLAG_GET_AFTER_SET = 0x04   # perform a 'get' after a 'set'
     FLAG_SOFTGET = 0x08         # 'get' operation is simulated in software,

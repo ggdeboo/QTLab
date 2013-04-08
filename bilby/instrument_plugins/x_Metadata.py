@@ -1,6 +1,7 @@
 # Metatdata.py class, to store sample related metadata
 # Sam Gorman <samuel.gorman@student.unsw.edu.au>, 2013
 # Sam Hile <samhile@gmail.com> 2013
+# Charley Peng <cpeng92@gmail.com> 2013
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -29,13 +30,14 @@ class x_Metadata(Instrument):
     <name> = instruments.create('name', 'x_Metadata')
 
     TODO:
-    1) All
+    1) multi line textbox for user.
+    -> will have to change gui/frontpanel.py
     
     Store Metadata on 
         User
         Notes
         Time            
-        Device Number
+        Device Number        
     '''
 
     def __init__(self, name, reset=False):
@@ -52,41 +54,47 @@ class x_Metadata(Instrument):
         Instrument.__init__(self, name, tags=['virtual'])
 
         self.add_parameter('user', type=types.StringType,
-            flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET)
+            flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET | \
+              Instrument.FLAG_PERSIST)
         self.add_parameter('notes', type=types.StringType,
-            flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET)
+            flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET | \
+              Instrument.FLAG_PERSIST)
         self.add_parameter('device', type=types.StringType,
-            flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET)
+            flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET | \
+              Instrument.FLAG_PERSIST)
         self.add_parameter('dip', type=types.StringType,
-            flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET)            
+            flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET | \
+              Instrument.FLAG_PERSIST)            
         self.add_parameter('time', type=types.StringType,
             flags=Instrument.FLAG_GET)   
             
-        # self.add_function('do_get_user')
-        # self.add_function('do_set_user')
+        self.add_function('do_get_user')
+        self.add_function('do_set_user')
         
-        # self.add_function('do_get_notes')
-        # self.add_function('do_set_notes')
+        self.add_function('do_get_notes')
+        self.add_function('do_set_notes')
         
-        # self.add_function('do_get_device')
-        # self.add_function('do_set_device')
+        self.add_function('do_get_device')
+        self.add_function('do_set_device')
         
-        # self.add_function('do_get_dip')
-        # self.add_function('do_set_dip')              
+        self.add_function('do_get_dip')
+        self.add_function('do_set_dip')              
         
-        # self.add_function('do_get_time')
+        self.add_function('do_get_time')
         
         if reset:
             self.reset()
         else:
             self.get_all()
-     
+        self._dip = ''
+        self._exp = ''
+        self._notes = ''
+        self._user = ''
 
-        
     def get_all(self):
         '''
         Reads all implemented parameters that have been set,
-        and updates the wrapper.
+        and updates the wrapperself.
 
         Input:
             None
@@ -94,7 +102,7 @@ class x_Metadata(Instrument):
         Output:
             None
         '''
-        logging.info(__name__ + ' : reading all settings from instrument')               
+        logging.info('reading all settings from metadata instrument')               
         # TODO ? is this necessary
 
     def do_get_time(self):
@@ -115,8 +123,7 @@ class x_Metadata(Instrument):
 
         Output:
             user (string)
-        '''
-        logging.debug(__name__ + ' : getting user')        
+        '''        
         return self._user
         
     def do_set_user(self, val):
@@ -124,7 +131,7 @@ class x_Metadata(Instrument):
         Set user to val
 
         Input:
-            None
+            user (str)
 
         Output:
             None
@@ -159,23 +166,23 @@ class x_Metadata(Instrument):
         
     def do_get_dip(self):
         '''
-        Returns the notes
+        Returns the dip number
 
         Input:
             none
 
         Output:
-            notes (string)
+            dip (string)
         '''
         logging.debug(__name__ + ' : getting dip')        
         return self._dip
         
     def do_set_dip(self, val):
         '''
-        Set notes to val
+        Set dip notes to val
 
         Input:
-            None
+            Dip.
 
         Output:
             None
@@ -184,7 +191,7 @@ class x_Metadata(Instrument):
     
     def do_get_device(self):
         '''
-        Returns the experiment
+        Returns the device
 
         Input:
             none
@@ -197,10 +204,10 @@ class x_Metadata(Instrument):
         
     def do_set_device(self, val):
         '''
-        Set notes to val
+        Set device to val
 
         Input:
-            None
+            device (str)
 
         Output:
             None

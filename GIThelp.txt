@@ -3,3 +3,5 @@ git add
 git commit
 git push
 
+git config --global core.autocrlf false
+git update-index --assume-unchanged
