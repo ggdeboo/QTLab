@@ -56,7 +56,7 @@ class x_Metadata(Instrument):
         self.add_parameter('user', type=types.StringType,
             flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET | \
               Instrument.FLAG_PERSIST)
-        self.add_parameter('notes', type=types.StringType,
+        self.add_parameter('notes', type=types.FileType,
             flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET | \
               Instrument.FLAG_PERSIST)
         self.add_parameter('device', type=types.StringType,
@@ -111,7 +111,9 @@ class x_Metadata(Instrument):
         %a, %d %b %Y %H:%M:%S
         '''
         import time        
+        logging.info("returning the current time")
         return time.strftime("%a, %d %b %Y %H:%M:%S",time.localtime())
+
            
         
     def do_get_user(self):

@@ -850,6 +850,8 @@ class Instrument(SharedGObject):
     _CONVERT_MAP = {
             types.IntType: int,
             types.FloatType: float,
+            # charley's test
+            types.FileType: str,
             types.StringType: str,
             types.BooleanType: bool,
             types.TupleType: tuple,
