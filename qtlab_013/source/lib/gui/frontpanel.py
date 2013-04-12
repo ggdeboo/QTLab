@@ -62,61 +62,36 @@ class StringLabel(gtk.Label):
             self._update_value(params[self._parameter])
 
 
+class MultiStringEntry(gtk.TextView):
 
+    def __init__(self, ins, param, opts, autoupdate=True):
+        gtk.TextView.__init__(self)
+        self._instrument = ins
+        self._parameter = param
+        self._dirty = False
 
-# class MultiStringEntry(gtk.TextView):
+    def _update_value(self, val, widget=None):
+        _enable_widget(widget)
+        self._dirty = False
+        if val is None:
+            val = ''
+        self.get_buffer().set_text(val)
 
-#     def __init__(self, ins, param, opts, autoupdate=True):
+    def do_get(self, widget=None, query=True):
+        self._instrument.get(self._parameter, query=query,
+                callback=lambda x: self._update_value(x, widget=widget))
 
-#         f = open("D:/data.log",'a')
-#         f.write('1')
-#         gtk.TextView.__init__(self)
-#         self._instrument = ins
-#         self._parameter = param
-#         self._dirty = False
+    def do_set(self, widget=None):
+        self._dirty = False
+        bounds = self.get_buffer().get_bounds()
+        # returns the bounds of the buffer
+        val = self.get_buffer().get_text(bounds[0], bounds[1])
+        self._instrument.set(self._parameter, val, \
+            callback=lambda x: _enable_widget(widget))
 
-#         f.write('2')
-#         f.write(str(type(ins))+'play')
-#         #self._autoupdate = autoupdate
-#         #if self._autoupdate:
-#          #   ins.connect('changed', self._parameter_changed_cb)
-
-#         f.write('3')
-#         #self.connect('changed', self._entry_changed_cb)
-#         f.write('4')
-#         f.close()
-
-#     def _update_value(self, val, widget=None):
-#         pass
-#     #     _enable_widget(widget)
-#     #     self._dirty = False
-#     #     if val is None:
-#     #         val = ''
-#     #     self.get_buffer().set_text(val)
-
-#     # def do_get(self, widget=None, query=True):
-#     #     self._instrument.get(self._parameter, query=query,
-#     #             callback=lambda x: self._update_value(x, widget=widget))
-#     def do_get(self, widget=None, query=True):
-#         pass
-
-#     def do_set(self, widget=None):
-#         pass
-#     #     self._dirty = False        
-#     #     bounds = self.get_buffer().get_bounds()
-#     #     # print label.get_buffer().get_text(bounds[0], bounds[1])
-#     #     val = self.get_buffer().get_text(bounds[0], bounds[1])
-#     #     logging.error(val+'val!')
-#     #     self._instrument.set(self._parameter, val, \
-#     #         callback=lambda x: _enable_widget(widget))
-
-#     # def _parameter_changed_cb(self, sender, params):
-#     #     if self._parameter in params and not self._dirty:
-#     #         self._update_value(params[self._parameter])
-
-#     # def _entry_changed_cb(self, sender, *args):
-#     #     # FIXME: how to detect whether we're dirty?
-#     #     pass
+    def _entry_changed_cb(self, sender, *args):
+        # FIXME: how to detect whether we're dirty?
+        pass
 
 class StringEntry(gtk.Entry):
 
@@ -326,9 +301,9 @@ class FrontPanel(qtwindow.QTWindow):
             entry = StringLabel(self._instrument, param, opts)
         elif opts['type'] is types.FileType:
             # todo this is broken            
-           # entry = MultiStringEntry(self._instrument, param, opts)
-            entry = StringEntry(self._instrument, param, opts)
-           # logging.error("what is going on here?")
+            entry = MultiStringEntry(self._instrument, param, opts)
+           # entry = StringEntry(self._instrument, param, opts)
+            logging.error("what is going on here?")
         elif 'format_map' in opts or 'option_list' in opts:
             entry = ComboEntry(self._instrument, param, opts)
         elif opts['type'] in (types.IntType, types.FloatType):
@@ -364,8 +339,8 @@ class FrontPanel(qtwindow.QTWindow):
             if opts['flags'] & qt.constants.FLAG_SET:
                 but = gtk.Button(_L('Set'))
                 but.connect('clicked', self._set_clicked, name)
-                if not isinstance(entry, ComboEntry):
-                    entry.connect('activate', self._set_clicked, name)
+                if not isinstance(entry, ComboEntry) and not isinstance(entry, MultiStringEntry):
+                    entry.connect('activate', self._set_clicked, name)                
                 hbox.pack_start(but)
             if opts['flags'] & qt.constants.FLAG_GET or \
                     opts['flags'] & qt.constants.FLAG_SOFTGET:

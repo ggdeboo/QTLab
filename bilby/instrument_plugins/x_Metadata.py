@@ -68,19 +68,19 @@ class x_Metadata(Instrument):
         self.add_parameter('time', type=types.StringType,
             flags=Instrument.FLAG_GET)   
             
-        self.add_function('do_get_user')
-        self.add_function('do_set_user')
+        # self.add_function('do_get_user')
+        # self.add_function('do_set_user')
         
-        self.add_function('do_get_notes')
-        self.add_function('do_set_notes')
+        # self.add_function('do_get_notes')
+        # self.add_function('do_set_notes')
         
-        self.add_function('do_get_device')
-        self.add_function('do_set_device')
+        # self.add_function('do_get_device')
+        # self.add_function('do_set_device')
         
-        self.add_function('do_get_dip')
-        self.add_function('do_set_dip')              
+        # self.add_function('do_get_dip')
+        # self.add_function('do_set_dip')              
         
-        self.add_function('do_get_time')
+        # self.add_function('do_get_time')
         
         if reset:
             self.reset()
