@@ -1,8 +1,8 @@
 ###New Bits:
 Add Instrument Drivers
  ASAP:
-  AMI Magnet
-  Cryocon Temp Controller
+  AMI Magnet (This is now operational
+  Cryocon Temp Controller (This is now operational)
  Later:
   Keithly SMU
   Complete Yoko
