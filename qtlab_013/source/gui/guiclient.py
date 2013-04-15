@@ -1,9 +1,4 @@
 # QTLab gui client
-
-import logging
-l = logging.getLogger()
-l.setLevel(logging.WARNING)
-
 import os
 import sys
 import time
@@ -18,6 +13,30 @@ from lib.network import object_sharer as objsh
 
 from lib.misc import get_traceback
 TB = get_traceback()()
+import logging
+f = logging.FileHandler(os.path.join(config['execdir'], 'qtlab_windows.log'), mode='a+')
+formatter = logging.Formatter(fmt='%(asctime)s %(levelname)-8s: %(message)s (%(filename)s:%(lineno)d)',
+      datefmt='%Y-%m-%d %H:%M')
+f.setFormatter(formatter)
+f.setLevel(logging.DEBUG)
+logging.getLogger('').addHandler(f)
+console = logging.StreamHandler()
+console.setLevel(logging.DEBUG)
+formatter = logging.Formatter('%(name)s: %(levelname)-8s %(message)s')
+console.setFormatter(formatter)
+logging.getLogger('').addHandler(console)
+logging.getLogger('').setLevel(logging.DEBUG) 
+# change this line to reduce the verbosity of the debugging messages
+# logging.info('logging for windows enabled')
+# logging.error('test error')
+# logging.debug('debug message')
+
+def log(msg):
+    ''' just another alternative logging function '''
+    f = open(config["execdir"]+"/window.log",'a+')    
+    f.write(msg)
+    f.write("\n")
+    f.close()
 
 def setup_windows():
     from windows import main_window
@@ -42,6 +61,8 @@ def setup_windows():
             exec codestr
         except Exception, e:
             print 'Error loading window %s' % classname
+            # not very useful since it's run in a seperate file.
+
             TB()
 
         delta = time.time() - start

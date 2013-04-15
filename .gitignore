@@ -5,3 +5,4 @@ qtlabgui.cfg
 *.cfg
 *.lock
 *.bak
+*.tmp

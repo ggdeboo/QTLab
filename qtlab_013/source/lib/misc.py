@@ -105,7 +105,11 @@ def get_traceback():
     if ipython_is_newer((0, 11)):
         from IPython.core.ultratb import AutoFormattedTB
     else:
-        from IPython.ultraTB import AutoFormattedTB
+        from IPython.ultraTB import AutoFormattedTB    
+    # import os
+    # if os.name == 'nt':
+    # #   This line bugs out IPython
+    #     return AutoFormattedTB(color_scheme=u'NoColor')
     return AutoFormattedTB
 
 def ipython_is_newer(vin):
