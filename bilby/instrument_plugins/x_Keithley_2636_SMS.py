@@ -68,13 +68,19 @@ class x_Keithley_2636(Instrument):
             units='AU', channels=(1, 2))
         self.add_parameter('mode', type=types.IntType, 
             flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET,
-            channels=(1, 2))
+            channels=(1, 2),
+            format_map = {
+            0 : "DC Voltage",
+            1 : "DC Current"})
         self.add_parameter('line_freq', type=types.IntType, 
             flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET,
             units='Hz')
         self.add_parameter('range', type=types.FloatType, 
             flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET,
             units='AU', channels=(1, 2))
+        self.add_parameter('autorange', type=types.BooelanType, 
+            flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET,
+            channels=(1, 2))
         self.add_parameter('status', type=types.FloatType, 
             flags=Instrument.FLAG_GET)
 
@@ -137,32 +143,98 @@ class x_Keithley_2636(Instrument):
 
     # communication with device
     
-    def do_get_current(self, channel):
+    
+    def do_get_mode(self, channel):
+        '''
+        Gets the mode from channel A (1) or B (2) and updates the wrapper
+        
+        Input:
+            Channel (int) = 1 (A) or 2 (B)
+             
+        Output:
+            Mode of the channel (int) ((0) DCVOLTS or (1) DCAMPS)
+        '''
+        
+        logging.debug(__name__ + ' :Getting functional mode value of channel %i' % channel)
+        if channel == 1:
+            mode = self._visainstrument.ask('print(smua.source.func)')
+                if mode == smua.OUTPUT_DCVOLTS:
+                    return 0
+                elif mode == smua.OUTPUT_DCAMPS:
+                    return 1
+                else:
+                    raise ValueError('Invalid function mode - Select DCVOLTS (0) or DCAMPS (1)')
+        elif channel == 2:
+            mode = self._visainstrument.ask('print(smub.source.func)')
+                if mode == smub.OUTPUT_DCVOLTS:
+                    return 0
+                elif mode == smub.OUTPUT_DCAMPS:
+                    return 1
+                else:
+                    raise ValueError('Invalid function mode - Select DCVOLTS (0) or DCAMPS (1)')
+        else:
+            raise ValueError('Invalid channel')
+            
+
+    def do_set_mode(self, channel, val):
+                '''
+        Sets the mode from channel A (1) or B (2) and updates the wrapper
+        
+        Input:
+            Channel (int) = 1 (A) or 2 (B)
+            val = (0) DCVOLTS or (1) DCAMPS
+             
+        Output:
+            None
+        '''
+        logging.debug(__name__ + ' :Setting functional mode value of channel %i' % channel)
+        if channel == 1:
+            if val == 0:
+                self._visainstrument.write('smua.source.func=smua.OUTPUT_DCVOLTS')
+            elif val == 1:
+                self._visainstrument.write('smua.source.func=smua.OUTPUT_DCAMPS')
+            else:
+                raise ValueError('Invalid function mode - Select DCVOLTS (0) or DCAMPS (1)')
+        elif channel == 2:
+            if val == 0:
+                self._visainstrument.write('smub.source.func=smub.OUTPUT_DCVOLTS')
+            elif val == 1:
+                self._visainstrument.write('smub.source.func=smub.OUTPUT_DCAMPS')
+            else:
+                raise ValueError('Invalid function mode - Select DCVOLTS (0) or DCAMPS (1)')
+        else:
+            raise ValueError('Invalid channel')
+            
+    
+    def do_get_current(self, channel, mode):
         '''
         Gets the current from channel A (1) or B (2) and updates the wrapper
         
         Input:
-            Channel = 1 (A) or 2 (B)
+            Channel (int) = 1 (A) or 2 (B)
+            mode (int) = Mode of the channel
              
         Output:
-            Current value of the channel
+            Current value of the channel (float)
         '''
         
         logging.debug(__name__ + ' :Getting current value of channel %i' % channel)
         if channel == 1:
-            return float(self._visainstrumnet.ask('smua.measure.i()'))
+            return float(self._visainstrumnet.ask('print(smua.measure.i())'))
         elif channel == 2:
-            return float(self._visainstrumnet.ask('smub.measure.i()'))
+            return float(self._visainstrumnet.ask('print(smub.measure.i())'))
         else:
             raise ValueError('Invalid Channel')
             
     
-    def do_set_current(self, channel, val):
+    def do_set_current(self, channel, mode, val):
         '''
         Sets the current from channel A (1) or B (2) and updates the wrapper
         
         Input:
-            Channel = 1 (A) or 2 (B)
+            Channel (int) = 1 (A) or 2 (B)
+            mode (int) = Mode of the channel
+            val (float) = The current to be set
              
         Output:
             None
@@ -170,41 +242,121 @@ class x_Keithley_2636(Instrument):
     
         logging.debug(__name__ + ' :Setting current value of channel %i' % channel)
         if channel == 1:
-            return float(self._visainstrumnet.write('smua.source.leveli=%i' % val))
+            self._visainstrumnet.write('smua.source.leveli=%i' % val)
         elif channel == 2:
-            return float(self._visainstrument.write('smub.source.leveli=%i' % val))
+            self._visainstrument.write('smub.source.leveli=%i' % val)
         else:
             raise ValueError('Invalid channel')
             
-    
-    def do_get_mode(self, channel):
+            
+    def do_get_voltage(self, channel, mode):
         '''
-        Gets the mode from channel A (1) or B (2) and updates the wrapper
+        Gets the voltage from channel A (1) or B (2) and updates the wrapper
         
         Input:
-            Channel = 1 (A) or 2 (B)
+            Channel (int) = 1 (A) or 2 (B)
+            mode (int) = Mode of the channel
              
         Output:
-            Mode of the channel (DCVOLTS, DCCURR, etc)
+            Voltage value of the channel
         '''
         
-        logging.debug(__name__ + ' :Getting functional mode value of channel %i' % channel)
+        logging.debug(__name__ + ' :Getting voltage value of channel %i' % channel)
         if channel == 1:
-            mode = self._visainstrument.ask('smua.source.func')
-                if mode == smua.OUTPUT_DCVOLTS
-                    return DC Volts
-                if mode == smua.OUTPUT_DCCURR
-                    return DC Current
+            return float(self._visainstrumnet.ask('print(smua.measure.v())'))
         elif channel == 2:
-            mode =  self._visainstrument.ask('smub.source.func')
+            return float(self._visainstrumnet.ask('print(smub.measure.v())'))
+        else:
+            raise ValueError('Invalid Channel')
+            
     
-    
-    
-    
-    
-    
-    
-    
+    def do_set_voltage(self, channel, mode, val):
+        '''
+        Sets the voltage from channel A (1) or B (2) and updates the wrapper
         
+        Input:
+            Channel (int) = 1 (A) or 2 (B)
+            mode (int) = Mode of the channel
+            val (float) = Voltage to be set.
+             
+        Output:
+            None
+        '''
+    
+        logging.debug(__name__ + ' :Setting current value of channel %i' % channel)
+        if channel == 1:
+            self._visainstrumnet.write('smua.source.levelv=%i' % val)
+        elif channel == 2:
+            self._visainstrument.write('smub.source.levelv=%i' % val)
+        else:
+            raise ValueError('Invalid channel')
+            
+
+    def do_get_autorange(self, channel, mode):
+        '''
+        Get status of autorange (ON or OFF).
+        returns the value of the autorange value for the source mode
+
+        Input:
+            channel (int) = 1 (A) or 2 (B)
+            mode (int) = Mode of the channel
+
+        Output:
+            result (boolean)
+        '''
+        if channel == 0 and mode == 0:
+            auto = self._visainstrument.ask('print(smua.source.autorangev)')
+            if auto == smua.AUTORANGE_OFF:
+                return False
+            if auto == smua.AUTORANGE_ON:
+                return True
+            else:
+                raise ValueError('Invalid autorange setting')
+        elif channel == 0 and mode == 1:
+            auto = self._visainstrument.ask('print(smua.source.autorangei)')
+            if auto == smua.AUTORANGE_OFF:
+                return False
+            if auto == smua.AUTORANGE_ON:
+                return True
+            else:
+                raise ValueError('Invalid autorange setting')
+        elif channel == 1 and mode == 0:
+            auto = self._visainstrument.ask('print(smub.source.autorangev)')
+            if auto == smua.AUTORANGE_OFF:
+                return False
+            if auto == smua.AUTORANGE_ON:
+                return True
+            else:
+                raise ValueError('Invalid autorange setting')
+        elif channel == 1 and mode == 1:
+            auto = self._visainstrument.ask('print(smub.source.autorangei)')
+            if auto == smua.AUTORANGE_OFF:
+                return False
+            if auto == smua.AUTORANGE_ON:
+                return True
+            else:
+                raise ValueError('Invalid autorange setting')
+        else:
+            raise ValueError('Invalid mode and/or channel')
+        
+    
+    def do_set_autorange(self, channel, mode, val):
+        '''
+        Switch autorange on or off.
+        If mode=None the current mode is assumed
+
+        Input:
+            val (boolean)
+            mode (string) : mode to set property for. Choose from self._modes.
+
+        Output:
+            None
+        '''
+        logging.debug('Set autorange to %s ' % val)
+        val = bool_to_str(val)
+        self._set_func_par_value(mode, 'RANG:AUTO', val)
+    
+
+    
         
     
