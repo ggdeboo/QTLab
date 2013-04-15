@@ -7,4 +7,4 @@ del _lockname
 
 msg = "QTlab already running, start with '-f' to force start.\n"
 msg += "Press s<enter> to start anyway or just <enter> to quit."
-lockfile.check_lockfile(msg)
+#lockfile.check_lockfile(msg)
