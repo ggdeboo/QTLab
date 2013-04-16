@@ -67,8 +67,8 @@ class x_Keithley_2636(Instrument):
             # flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET,
             # units='AU', channels=(1, 2))
         self.add_parameter('output_mode', type=types.FloatType, 
-            flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET,
-            channels=(1, 2),
+            flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET,            
+            channels=(1, 2), 
             format_map = {
             0 : "DCAMPS",
             1 : "DCVOLTS"})
@@ -167,8 +167,8 @@ class x_Keithley_2636(Instrument):
         else:
             raise ValueError('Invalid channel')
 
-
-    def do_set_output_mode(self, channel, val):
+# figure out what is going on here val and channel are switched?
+    def do_set_output_mode(self, val, channel):
         '''
         Sets the mode from channel A (1) or B (2) and updates the wrapper
 
@@ -182,14 +182,14 @@ class x_Keithley_2636(Instrument):
 
         logging.debug(__name__ + ' :Setting functional mode value of channel %i' % channel)
         if channel == 1:
-            print val
+            self._visainstrument.write('smua.source.func=%i' % val)
         elif channel == 2:
-            print val
+            self._visainstrument.write('smub.source.func=%i' % val)
         else:
             raise ValueError('Invalid channel')
 
 
-    def do_get_current(self, channel, output_mode):
+    def do_get_current(self, output_mode, channel):
         '''
         Get the current from channel A or channel B
 
@@ -224,7 +224,7 @@ class x_Keithley_2636(Instrument):
             raise ValueError('Invalid channel')
 
 
-    def do_set_current(self, channel, output_mode, val):
+    def do_set_current(self, val, output_mode, channel):
         '''
         set the current from channel A or channel B
 
@@ -251,7 +251,7 @@ class x_Keithley_2636(Instrument):
             raise ValueError('Invalid channel')
 
 
-    def do_get_voltage(self, channel, output_mode):
+    def do_get_voltage(self, output_mode, channel):
         '''
         Get the current from channel A or channel B
 
@@ -286,7 +286,7 @@ class x_Keithley_2636(Instrument):
             raise ValueError('Invalid channel')
 
 
-    def de_set_voltage(self, channel, output_mode, val):
+    def do_set_voltage(self, output_mode, val, channel):
         '''
         set the current from channel A or channel B
 
