@@ -121,9 +121,9 @@ class NumberEntry(gtk.SpinButton):
                 self.set_digits(0)
                 self.set_increments(1, 10)
             elif opts['type'] is types.FloatType:
-                self.set_digits(2)
+                self.set_digits(10)
                 self.set_increments(0.01, 0.1)
-
+                
         self._autoupdate = autoupdate
         if self._autoupdate:
             ins.connect('changed', self._parameter_changed_cb)
@@ -136,6 +136,7 @@ class NumberEntry(gtk.SpinButton):
         if val is None:
             self.set_value(0)
         else:
+            #self.set_value("%g" % float(val))
             self.set_value(val)
 
     def do_get(self, widget=None, query=True):

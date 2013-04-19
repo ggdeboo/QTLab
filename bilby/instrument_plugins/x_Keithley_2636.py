@@ -46,6 +46,10 @@ class x_Keithley_2636(Instrument):
             address (string)     : GPIB address (GPIB::nn)
          Output:
             None
+            
+        TODO:
+            - Create variable parameters for: line_freq, range?, status?
+            - Find more parameters that need to be implemented
         '''
         logging.info(__name__ + ' : Initializing instrument Yoko')
         Instrument.__init__(self, name, tags=['physical'])
@@ -67,24 +71,33 @@ class x_Keithley_2636(Instrument):
             flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET,
             units='AU', channels=(1, 2))
         self.add_parameter('output_mode', type=types.IntType, 
-            flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET,            
-            channels=(1, 2), 
+            flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET,
+            channels=(1, 2),
             format_map = {
             0 : "DCAMPS",
             1 : "DCVOLTS"})
+        self.add_parameter('output_status', type=types.IntType,
+            flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET,
+            channels=(1, 2),
+            format_map = {
+            0 : "Output OFF",
+            1 : "Output ON"})
         # self.add_parameter('line_freq', type=types.IntType, 
             # flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET,
             # units='Hz')
         # self.add_parameter('range', type=types.FloatType, 
             # flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET,
             # units='AU', channels=(1, 2))
-        # self.add_parameter('source_autorange', type=types.BooleanType, 
-            # flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET,
-            # channels=(1, 2))
+        self.add_parameter('source_autorange', type=types.IntType, 
+            flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET,
+            channels=(1, 2),
+            format_map = {
+            0 : "OFF",
+            1 : "ON"})
         # self.add_parameter('status', type=types.FloatType, 
             # flags=Instrument.FLAG_GET)
 
-
+        self._visainstrument.write('beeper.enable=0')
         self.add_function('reset')
         # self.add_function('get_all')
 
@@ -94,8 +107,7 @@ class x_Keithley_2636(Instrument):
         # if reset:
             # self.reset()
         # else:
-            # self.get_all()
-
+            # self.get_all()        
 
     def reset(self):
         '''
@@ -376,3 +388,115 @@ class x_Keithley_2636(Instrument):
                 raise ValueError('Invalid mode')
         else:
             raise ValueError('Invalid channe;')
+
+
+    def do_get_output_status(self, channel):
+        '''
+        Gets the status of the output voltage or current (either ON or OFF)
+        
+        Input:
+            Channel (int) = (1) A or (2) B
+            
+        Output:
+            status (int) = OFF (0) or ON (0)
+        '''
+
+        logging.debug(__name__ + ' :Getting the output status of channel %i' % channel)
+        if channel == 1:
+            status = int(float(self._visainstrument.ask('print(smua.source.output)')))
+            return status
+        elif channel == 2:
+            status = int(float(self._visainstrument.ask('print(smub.source.output)')))
+            return status
+        else:
+            raise ValueError('Invalid channel')
+
+    def do_set_output_status(self, val, channel):
+        '''
+        Sets the status of the output voltage or current (either ON or OFF)
+        
+        Input:
+            Channel (int) = (1) A or (2) B
+            val (int) = OFF (0) or ON (0)
+            
+        Output:
+            None
+        '''
+
+        logging.debug(__name__ + ' :Setting the output status of channel %i' % channel)
+        if channel == 1:
+            self._visainstrument.write('smua.source.output=%i' % val)
+        elif channel == 2:
+            self._visainstrument.write('smub.source.output=%i' % val)
+        else:
+            raise ValueError('Invalid channel')
+            
+    
+    def do_get_source_autorange(self, channel):
+        '''
+        Gets the status of the autorange function
+        
+        Input:
+            Channel (int) = (1) A or (2) B
+            
+        Output:
+            autorange (int) = OFF (0) or ON (1)
+        '''
+
+        logging.debug(__name__ + ' :Getting the source autorange status of channel %i' % channel)
+        if channel == 1:
+            mode = int(float(self._visainstrument.ask('print(smua.source.func)')))
+            if mode == 0:
+                autorange = int(float(self._visainstrument.ask('print(smua.source.autorangei)')))
+                return autorange
+            elif mode == 0:
+                autorange = int(float(self._visainstrument.ask('print(smua.source.autorangev)')))
+                return autorange
+            else:
+                raise ValueError('Invalid mode')
+        elif channel == 2:
+            mode = int(float(self._visainstrument.ask('print(smub.source.func)')))
+            if mode == 0:
+                autorange = int(float(self._visainstrument.ask('print(smub.source.autorangei)')))
+                return autorange
+            elif mode == 1:
+                autorange = int(float(self._visainstrument.ask('print(smub.source.autorangev)')))
+                return autorange
+            else:
+                raise ValueError('Invalid mode')
+        else:
+            raise ValueError('Invalid channel')
+
+
+    def do_set_source_autorange(self, val, channel):
+        '''
+        Sets the status of the autorange function
+        
+        Input:
+            Channel (int) = (1) A or (2) B
+            val (int) = OFF (0) or ON (1)
+            
+        Output:
+            None
+        '''
+
+        logging.debug(__name__ + ' :Setting the source autorange status of channel %i' % channel)
+        if channel == 1:
+            mode = int(float(self._visainstrument.ask('print(smua.source.func)')))
+            if mode == 0:
+                self._visainstrument.write('smua.source.autorangei=%i' % val)
+            elif mode == 1:
+                self._visainstrument.write('smua.source.autorangev=%i' % val)
+            else:
+                raise ValueError('Invalid mode')
+        elif channel == 2:
+            mode = int(float(self._visainstrument.ask('print(smub.source.func)')))
+            if mode == 0:
+                self._visainstrument.write('smub.source.autorangei=%i' % val)
+            elif mode == 1:
+                self._visainstrument.write('smub.source.autorangev=%i' % val)
+            else:
+                raise ValueError('Invalid mode')
+        else:
+             raise ValueError('Invalid channel')
+

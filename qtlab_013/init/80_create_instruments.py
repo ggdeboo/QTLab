@@ -5,7 +5,7 @@
 #TempCon1 = qt.instruments.create('TempCon1', 'x_Cryocon_32B', address='GPIB::12', reset=False)
 SourceMeter1 = qt.instruments.create('SourceMeter1', 'x_Keithley_2636', address='GPIB::18', reset=False)
 #Source1 = qt.instruments.create('Source1', 'x_Yokogawa_7651', address='GPIB::4', reset=False)
-#Meter1 = qt.instruments.create('Meter1', 'x_Keithley_2001', address='GPIB::16', reset=False)
+Meter1 = qt.instruments.create('Meter1', 'x_Keithley_2001', address='GPIB::16', reset=False)
 
 ##########Examples##########
 #example1 = qt.instruments.create('example1', 'example', address='GPIB::1', reset=True)
