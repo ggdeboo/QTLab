@@ -153,7 +153,7 @@ class QTCreateInstrumentFrame(gtk.VBox):
         gpib = self._gpib_entry.get_text()        
         logging.debug("Creating %s as %s, **args: %r", name, typename, args)
         ins = None
-        if gpib == '':
+        if gpib != '':
             logging.debug("Found Gpib::{0}".format(gpib))
             ins = qt.instruments.create(name, typename, address="GPIB::"+str(gpib), **args)
         else:
