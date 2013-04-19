@@ -108,11 +108,18 @@ class QTCreateInstrumentFrame(gtk.VBox):
         self._add_button.connect('clicked', self._add_clicked_cb)
         self._add_button.set_sensitive(False)
 
-        self._argument_table = ArgumentTable(2, 2, exclude=['self', 'name'])
+        gpib_label = gtk.Label(_L('GPIB')) #not necessary to have _L
+        self._gpib_entry = gtk.Entry()        
+
+        self._argument_table = ArgumentTable(3, 2, exclude=['self', 'name'])
         self._argument_table.attach(name_label, 0, 1, 0, 1)
         self._argument_table.attach(self._name_entry, 1, 2, 0, 1)
         self._argument_table.attach(type_label, 0, 1, 1, 2)
         self._argument_table.attach(self._type_dropdown, 1, 2, 1, 2)
+
+        self._argument_table.attach(gpib_label, 0, 1, 2, 3)
+        self._argument_table.attach(self._gpib_entry, 1, 2, 2, 3)
+
 
         vbox = gui.pack_vbox([
             self._argument_table,
@@ -143,8 +150,14 @@ class QTCreateInstrumentFrame(gtk.VBox):
         name = self._name_entry.get_text()
         typename = self._type_dropdown.get_typename()
         args = self._argument_table.get_args()
+        gpib = self._gpib_entry.get_text()        
         logging.debug("Creating %s as %s, **args: %r", name, typename, args)
-        ins = qt.instruments.create(name, typename, **args)
+        ins = None
+        if gpib == '':
+            logging.debug("Found Gpib::{0}".format(gpib))
+            ins = qt.instruments.create(name, typename, address="GPIB::"+str(gpib), **args)
+        else:
+            ins = qt.instruments.create(name, typename, **args)
         if ins is not None:
             self._name_entry.set_text('')
             self._type_dropdown.select_none_type()
