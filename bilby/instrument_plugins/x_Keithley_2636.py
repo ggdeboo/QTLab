@@ -99,7 +99,6 @@ class x_Keithley_2636(Instrument):
 
         self._visainstrument.write('beeper.enable=0')
         self.add_function('reset')
-        # self.add_function('get_all')
 
         # self.add_function('off')
         # self.add_function('on')
@@ -122,35 +121,6 @@ class x_Keithley_2636(Instrument):
         '''
         logging.info(__name__ + ' : resetting instrument')
         self._visaintrsument.write(reset())
-        #self.get_all()
-
-    # def get_all(self):
-        # '''
-        # Reads all implemented parameters from the instrument,
-        # and updates the wrapper.
-
-        # Input:
-            # None
-
-        # Output:
-            # None
-        # '''
-        # logging.info(__name__ + ' : get all')
-
-        # self.get_ch1_mode()
-        # self.get_ch1_current()
-        # self.get_ch1_voltage()
-        # self.get_ch1_limit()
-        # self.get_ch1_range()
-
-        # self.get_ch2_mode()
-        # self.get_ch2_current()
-        # self.get_ch2_voltage()
-        # self.get_ch2_limit()
-        # self.get_ch2_range()
-
-        # self.get_line_freq
-        # self.get_status
 
 
     # communication with device
@@ -336,20 +306,20 @@ class x_Keithley_2636(Instrument):
         if channel == 1:
             mode = int(float(self._visainstrument.ask('print(smua.source.func)')))
             if mode == 0:
-                limit = float(self._visainstrument.ask('print(smua.source.limitv)'))
+                limit = float(self._visainstrument.ask('print(smua.source.limiti)'))
                 return limit
             elif mode == 1:
-                limit = float(self._visainstrument.ask('print(smua.source.limiti)'))
+                limit = float(self._visainstrument.ask('print(smua.source.limitv)'))
                 return limit
             else:
                 raise ValueError('Invalid mode')
         elif channel == 2:
             mode = int(float(self._visainstrument.ask('print(smub.source.func)')))
             if mode == 0:
-                limit = float(self._visainstrument.ask('print(smub.source.limitv)'))
+                limit = float(self._visainstrument.ask('print(smub.source.limiti)'))
                 return limit
             elif mode == 1:
-                limit = float(self._visainstrument.ask('print(smub.source.limiti)'))
+                limit = float(self._visainstrument.ask('print(smub.source.limitv)'))
                 return limit
             else:
                 raise ValueError('Invalid mode')
@@ -373,21 +343,21 @@ class x_Keithley_2636(Instrument):
         if channel == 1:
             mode = int(float(self._visainstrument.ask('print(smua.source.func)')))
             if mode == 0:
-                self._visainstrument.write('smua.source.limitv=%e' % val)
-            elif mode == 1:
                 self._visainstrument.write('smua.source.limiti=%e' % val)
+            elif mode == 1:
+                self._visainstrument.write('smua.source.limitv=%e' % val)
             else:
                 raise ValueError('Invalid mode')
         elif channel == 2:
             mode = int(float(self._visainstrument.ask('print(smub.source.func)')))
             if mode == 0:
-                self._visainstrument.write('smub.source.limitv=%e' % val)
-            elif mode == 1:
                 self._visainstrument.write('smub.source.limiti=%e' % val)
+            elif mode == 1:
+                self._visainstrument.write('smub.source.limitv=%e' % val)
             else:
                 raise ValueError('Invalid mode')
         else:
-            raise ValueError('Invalid channe;')
+            raise ValueError('Invalid channel')
 
 
     def do_get_output_status(self, channel):
@@ -449,7 +419,7 @@ class x_Keithley_2636(Instrument):
             if mode == 0:
                 autorange = int(float(self._visainstrument.ask('print(smua.source.autorangei)')))
                 return autorange
-            elif mode == 0:
+            elif mode == 1:
                 autorange = int(float(self._visainstrument.ask('print(smua.source.autorangev)')))
                 return autorange
             else:
