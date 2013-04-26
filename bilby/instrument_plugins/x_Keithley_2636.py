@@ -33,7 +33,10 @@ class x_Keithley_2636(Instrument):
     <name> = instruments.create('<name>', 'x_Keithley_2636', address='<GBIP address>, reset=<bool>')
 
     TODO:
-    1) All
+        1) Implement different measuring functions. This means irrespective of the source func
+        you are able to measure current, voltage, resistance or power. This is achieved by using the 
+        display.smuX.measure.func command (Details on P312 of manual). However, this involves altering
+        the rest of the commands in order to incorporate the new features.
     '''
 
 
@@ -47,9 +50,6 @@ class x_Keithley_2636(Instrument):
          Output:
             None
             
-        TODO:
-            - Create variable parameters for: line_freq, range?, status?
-            - Find more parameters that need to be implemented
         '''
         logging.info(__name__ + ' : Initializing instrument Yoko')
         Instrument.__init__(self, name, tags=['physical'])
@@ -82,31 +82,29 @@ class x_Keithley_2636(Instrument):
             format_map = {
             0 : "Output OFF",
             1 : "Output ON"})
-        # self.add_parameter('line_freq', type=types.IntType, 
-            # flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET,
-            # units='Hz')
-        # self.add_parameter('range', type=types.FloatType, 
-            # flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET,
-            # units='AU', channels=(1, 2))
+        self.add_parameter('line_freq', type=types.IntType, 
+            flags=Instrument.FLAG_GET, units='Hz')
+        self.add_parameter('source_range', type=types.FloatType, 
+            flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET,
+            units='AU', channels=(1, 2))
+        self.add_parameter('measure_range', type=types.FloatType, 
+            flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET,
+            units='AU', channels=(1, 2))
         self.add_parameter('source_autorange', type=types.IntType, 
             flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET,
             channels=(1, 2),
             format_map = {
             0 : "OFF",
             1 : "ON"})
-        # self.add_parameter('status', type=types.FloatType, 
-            # flags=Instrument.FLAG_GET)
+        self.add_parameter('measure_autorange', type=types.IntType, 
+            flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET,
+            channels=(1, 2),
+            format_map = {
+            0 : "OFF",
+            1 : "ON"})
 
         self._visainstrument.write('beeper.enable=0')
-        self.add_function('reset')
-
-        # self.add_function('off')
-        # self.add_function('on')
-
-        # if reset:
-            # self.reset()
-        # else:
-            # self.get_all()        
+        self.add_function('reset')      
 
     def reset(self):
         '''
@@ -405,10 +403,10 @@ class x_Keithley_2636(Instrument):
     def do_get_source_autorange(self, channel):
         '''
         Gets the status of the autorange function
-        
+
         Input:
             Channel (int) = (1) A or (2) B
-            
+
         Output:
             autorange (int) = OFF (0) or ON (1)
         '''
@@ -441,7 +439,7 @@ class x_Keithley_2636(Instrument):
     def do_set_source_autorange(self, val, channel):
         '''
         Sets the status of the autorange function
-        
+
         Input:
             Channel (int) = (1) A or (2) B
             val (int) = OFF (0) or ON (1)
@@ -469,4 +467,233 @@ class x_Keithley_2636(Instrument):
                 raise ValueError('Invalid mode')
         else:
              raise ValueError('Invalid channel')
+
+
+    def do_get_source_range(self, channel):
+        '''
+        Gets the output source range of the Source Meter
+
+        Input:
+            channel (int) = Channel (int) = (1) A or (2) B
+
+        Output:
+            Range (float) = Value of the range the source is set to
+        '''
+
+        logging.debug(__name__ + ' :Getting the range of the source of SourceMeter')
+        if channel == 1:
+            mode = int(float(self._visainstrument.ask('print(smua.source.func)')))
+            if mode == 0:
+                range = float(self._visainstrument.ask('print(smua.source.rangei)'))
+                return range
+            elif mode == 1:
+                range = float(self._visainstrument.ask('print(smua.source.rangev)'))
+                return range
+            else:
+                raise ValueError('Invalid mode')
+        elif channel == 2:
+            mode = int(float(self._visainstrument.ask('print(smub.source.func)')))
+            if mode == 0:
+                range = float(self._visainstrument.ask('print(smub.source.rangei)'))
+                return range
+            elif mode == 1:
+                range = float(self._visainstrument.ask('print(smub.source.rangev)'))
+                return range
+            else:
+                raise ValueError('Invalid mode')
+        else:
+            raise ValueError('Invalid channel')
+
+
+    def do_set_source_range(self, val, channel):
+        '''
+        Sets the output source range of the Source Meter
+
+        Input:
+            channel (int) = Channel (int) = (1) A or (2) B
+            val (float) = Value of which the range is to be set
+
+        Output:
+            None
+        '''
+        logging.debug(__name__ + ' :Setting the range of the source of SourceMeter')
+        if channel == 1:
+            mode = int(float(self._visainstrument.ask('print(smua.source.func)')))
+            if mode == 0:
+                self._visainstrument.write('smua.source.rangei=%e' % val)
+            elif mode == 1:
+                self._visainstrument.write('smua.source.rangev=%e' % val)
+            else:
+                raise ValueError('Invalid mode')
+        elif channel == 2:
+            mode = int(float(self._visainstrument.ask('print(smub.source.func)')))
+            if mode == 0:
+                self._visainstrument.write('smub.source.rangei=%e' % val)
+            elif mode == 1:
+                self._visainstrument.write('smub.source.rangev=%e' % val)
+            else:
+                raise ValueError('Invalid mode')
+        else:
+            raise ValueError('Invalid channel')
+
+
+    def do_get_measure_autorange(self, channel):
+        '''
+        Gets the status of the measure autorange function
+
+        Input:
+            Channel (int) = (1) A or (2) B
+
+        Output:
+            autorange (int) = OFF (0) or ON (1)
+        '''
+
+        logging.debug(__name__ + ' :Getting the measure autorange status of channel %i' % channel)
+        if channel == 1:
+            mode = int(float(self._visainstrument.ask('print(smua.source.func)')))
+            if mode == 0:
+                autorange = int(float(self._visainstrument.ask('print(smua.measure.autorangev)')))
+                return autorange
+            elif mode == 1:
+                autorange = int(float(self._visainstrument.ask('print(smua.measure.autorangei)')))
+                return autorange
+            else:
+                raise ValueError('Invalid mode')
+        elif channel == 2:
+            mode = int(float(self._visainstrument.ask('print(smub.source.func)')))
+            if mode == 0:
+                autorange = int(float(self._visainstrument.ask('print(smub.measure.autorangev)')))
+                return autorange
+            elif mode == 1:
+                autorange = int(float(self._visainstrument.ask('print(smub.measure.autorangei)')))
+                return autorange
+            else:
+                raise ValueError('Invalid mode')
+        else:
+            raise ValueError('Invalid channel')
+
+
+    def do_set_measure_autorange(self, val, channel):
+        '''
+        Sets the status of the measure autorange function
+
+        Input:
+            Channel (int) = (1) A or (2) B
+            val (int) = OFF (0) or ON (1)
+            
+        Output:
+            None
+        '''
+
+        logging.debug(__name__ + ' :Setting the measure autorange status of channel %i' % channel)
+        if channel == 1:
+            mode = int(float(self._visainstrument.ask('print(smua.source.func)')))
+            if mode == 0:
+                self._visainstrument.write('smua.measure.autorangev=%i' % val)
+            elif mode == 1:
+                self._visainstrument.write('smua.measure.autorangei=%i' % val)
+            else:
+                raise ValueError('Invalid mode')
+        elif channel == 2:
+            mode = int(float(self._visainstrument.ask('print(smub.source.func)')))
+            if mode == 0:
+                self._visainstrument.write('smub.measure.autorangev=%i' % val)
+            elif mode == 1:
+                self._visainstrument.write('smub.measure.autorangei=%i' % val)
+            else:
+                raise ValueError('Invalid mode')
+        else:
+             raise ValueError('Invalid channel')
+
+    def do_get_measure_range(self, channel):
+        '''
+        Gets the measure range of the Source Meter
+
+        Input:
+            channel (int) = Channel (int) = (1) A or (2) B
+
+        Output:
+            Range (float) = Value of the range the source is set to
+        '''
+
+        logging.debug(__name__ + ' :Getting the measure range of SourceMeter')
+        if channel == 1:
+            mode = int(float(self._visainstrument.ask('print(smua.source.func)')))
+            if mode == 0:
+                range = float(self._visainstrument.ask('print(smua.measure.rangev)'))
+                return range
+            elif mode == 1:
+                range = float(self._visainstrument.ask('print(smua.measure.rangei)'))
+                return range
+            else:
+                raise ValueError('Invalid mode')
+        elif channel == 2:
+            mode = int(float(self._visainstrument.ask('print(smub.source.func)')))
+            if mode == 0:
+                range = float(self._visainstrument.ask('print(smub.measure.rangev)'))
+                return range
+            elif mode == 1:
+                range = float(self._visainstrument.ask('print(smub.measure.rangei)'))
+                return range
+            else:
+                raise ValueError('Invalid mode')
+        else:
+            raise ValueError('Invalid channel')
+
+
+    def do_set_measure_range(self, val, channel):
+        '''
+        Sets the measure range of the Source Meter
+
+        Input:
+            channel (int) = Channel (int) = (1) A or (2) B
+            val (float) = Value of which the range is to be set
+
+        Output:
+            None
+        '''
+        logging.debug(__name__ + ' :Setting the measure range of SourceMeter')
+        if channel == 1:
+            mode = int(float(self._visainstrument.ask('print(smua.source.func)')))
+            if mode == 0:
+                self._visainstrument.write('smua.measure.rangev=%e' % val)
+            elif mode == 1:
+                self._visainstrument.write('smua.measure.rangei=%e' % val)
+            else:
+                raise ValueError('Invalid mode')
+        elif channel == 2:
+            mode = int(float(self._visainstrument.ask('print(smub.source.func)')))
+            if mode == 0:
+                self._visainstrument.write('smub.measure.rangev=%e' % val)
+            elif mode == 1:
+                self._visainstrument.write('smub.measure.rangei=%e' % val)
+            else:
+                raise ValueError('Invalid mode')
+        else:
+            raise ValueError('Invalid channel')
+
+
+    def do_get_line_freq(self):
+        '''
+        Gets the line freqency of the Source Meter
+        
+        Input:
+            None
+        
+        Output:
+            Line freq (int) = 50 or 60 Hz
+        '''
+        
+        logging.debug(__name__ + ' :Getting the line frequency of SourceMeter')
+        frequency = int(float(self._visainstrument.ask('print(localnode.linefreq)')))
+        return frequency
+        if frequency != 50 | frequency != 60:
+            raise ValueError('Line frequency not configured')
+
+
+
+        
+
+
+        
 
