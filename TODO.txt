@@ -18,3 +18,12 @@ Units problem with frontpanel
 Figure out whats wrong with 'Watch'
 
 Test out Virtual Instruments and do we need a GUI?
+
+
+## Patches
+
+commit 6ff173039b4fff7dd1ef863964e0c39168b75831
+Author: Reinier Heeres <reinier@heeres.eu>
+Date:   Sun May 12 22:49:49 2013 -0400
+
+    Major update: move gui to 'clients' directory and add QT client framework
