@@ -19,6 +19,7 @@ import types
 from lib.dll_support import nidaq
 from instrument import Instrument
 import qt
+import numpy as np
 
 def _get_channel(devchan):
     if not '/' in devchan:
@@ -30,17 +31,17 @@ def _get_channel(devchan):
 
 class NI_DAQ(Instrument):
 
-    def __init__(self, name, id):
+    def __init__(self, name, id, samples=100, freq=10000.0, reset=False):
         Instrument.__init__(self, name, tags=['physical'])
 
         self._id = id
-
         for ch_in in self._get_input_channels():
             ch_in = _get_channel(ch_in)
             self.add_parameter(ch_in,
                 flags=Instrument.FLAG_GET,
-                type=types.FloatType,
-                units='V',
+#                type=types.FloatType,    #Jan en Max changed 'type=types.FloatType' to 'type=types.ListType, if charge sensing is needed'
+                type=np.ndarray,
+                units='mV',
                 tags=['measure'],
                 get_func=self.do_get_input,
                 channel=ch_in)
@@ -48,11 +49,14 @@ class NI_DAQ(Instrument):
         for ch_out in self._get_output_channels():
             ch_out = _get_channel(ch_out)
             self.add_parameter(ch_out,
-                flags=Instrument.FLAG_SET,
+                flags=Instrument.FLAG_GETSET,
                 type=types.FloatType,
-                units='V',
+                minval=-10000 , maxval = 10000,
+                units='mV',
                 tags=['sweep'],
+                maxstep=100, stepdelay=50,
                 set_func=self.do_set_output,
+                get_func=self.do_get_output,
                 channel=ch_out)
 
         for ch_ctr in self._get_counter_channels():
@@ -79,18 +83,47 @@ class NI_DAQ(Instrument):
             flags=Instrument.FLAG_SET|Instrument.FLAG_SOFTGET,
             type=types.FloatType,
             units='s')
+        #Added by Jan
+        self.add_parameter('samples',
+            flags=Instrument.FLAG_SET|Instrument.FLAG_SOFTGET,
+            type=types.IntType,
+            units='#')
+        #Added by Jan
+        self.add_parameter('freq',
+            flags=Instrument.FLAG_SET|Instrument.FLAG_SOFTGET,
+            type=types.FloatType,
+            units='#/s')         
 
         self.add_function('reset')
-        self.add_function('digital_out')
 
-        self.reset()
-        self.set_chan_config('RSE')
+        self.set_chan_config('Diff')
         self.set_count_time(0.1)
-        self.get_all()
+        self.set_samples(samples)#Added by Jan
+        self.set_freq(freq)#Added by Jan
+
+        # Update wrapper with current output value
+        # This assumes that the outputs are connected to the inputs that
+        # correspond to the output channel + 10!
+        self._output = {}
+        for ch_out in self._get_output_channels():
+            ch_out = _get_channel(ch_out)
+            _ch_in = ch_out.replace('o', 'i')
+            _ch_in = _ch_in.replace('0', '6')
+            _ch_in = _ch_in.replace('1', '7')
+            self._output[ch_out] = self.do_get_input(_ch_in)
+            #self._output[ch_out] = self.do_get_input(_ch_in[:-1] + '1' + _ch_in[-1])
+
+        if reset:
+            self.reset()
+        else:
+            self.get_all()
 
     def get_all(self):
         ch_in = [_get_channel(ch) for ch in self._get_input_channels()]
         self.get(ch_in)
+        for ch_out in self._get_output_channels():
+            ch_out = _get_channel(ch_out)
+            self.get(ch_out)
 
     def reset(self):
         '''Reset device.'''
@@ -105,13 +138,36 @@ class NI_DAQ(Instrument):
     def _get_counter_channels(self):
         return nidaq.get_physical_counter_channels(self._id)
 
-    def do_get_input(self, channel):
+    def do_get_input(self, channel, average=True, minvol = -10.0, maxvol = 10.0, trigger=False):
+        # Gabriele added the average parameter
         devchan = '%s/%s' % (self._id, channel)
-        return nidaq.read(devchan, config=self._chan_config)
+        #Jan added samples=self._samples and freq=self._fraq
+        values = nidaq.read(devchan, config=self._chan_config, samples=self._samples, freq=self._freq, averaging=average, minv=minvol, maxv=maxvol, triggered=trigger)
+        return (values * 1000.0)
 
+    def do_set_samples(self, samples):
+        #Added by Jan
+        self._samples = samples
+
+    def do_get_samples(self):
+        #Added by Jan
+        return self._samples
+
+    def do_set_freq(self, freq):
+        #Added by Jan
+        self._freq = freq
+
+    def do_get_freq(self):
+        #Added by Jan
+        return self._freq    
+        
     def do_set_output(self, val, channel):
         devchan = '%s/%s' % (self._id, channel)
-        return nidaq.write(devchan, val)
+        self._output[channel] = val
+        return nidaq.write(devchan, val/1000.0)#/100 for 1:10 divider, /1000 for normal
+
+    def do_get_output(self, channel):
+        return self._output[channel]
 
     def do_set_chan_config(self, val):
         self._chan_config = val
@@ -126,21 +182,8 @@ class NI_DAQ(Instrument):
             src = '/%s/%s' % (self._id, src)
         return nidaq.read_counter(devchan, src=src, freq=1/self._count_time)
 
-    def read_counters(self, channels):
-        chans = []
-        srcs = []
-        for chan in channels:
-            chans.append('%s/%s' % (self._id, chan))
-            srcs.append(self.get(chan + "_src"))
-        return nidaq.read_counters(chans, src=srcs, freq=1.0/self._count_time)
-
-    # Dummy
     def do_set_counter_src(self, val, channel):
         return True
-
-    def digital_out(self, lines, val):
-        devchan = '%s/%s' % (self._id, lines)
-        return nidaq.write_dig_port8(devchan, val)
 
 def detect_instruments():
     '''Refresh NI DAQ instrument list.'''

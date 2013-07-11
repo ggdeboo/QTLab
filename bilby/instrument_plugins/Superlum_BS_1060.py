@@ -27,6 +27,7 @@ class Superlum_BS_1060(Instrument):
 
         self._visainstrument.clear()
         self._visainstrument.ask('') # It always returns 'AE' after the clear command
+        self._visainstrument.ask('S12')
 
 #        self.add_function('reset')
         self.add_function('identify')
@@ -237,13 +238,13 @@ class Superlum_BS_1060(Instrument):
 
     def do_set_Operating_Mode(self, mode):
         if mode == 'Manual':
-            self._visainstrument.write('S61')
+            self._visainstrument.ask('S61')
         elif mode == 'Automatic':
-            self._visainstrument.write('S62')
+            self._visainstrument.ask('S62')
         elif mode == 'External':
-            self._visainstrument.write('S63')
+            self._visainstrument.ask('S63')
         elif mode == 'Modulation':
-            self._visainstrument.write('S64')
+            self._visainstrument.ask('S64')
         else:
             print 'Mode selection value is wrong, choose either Manual, Automatic, External or Modulation.'
 
@@ -333,7 +334,7 @@ class Superlum_BS_1060(Instrument):
         laser_string = '%0*d' % (4, wvl2int(wvl))
         reply = self._visainstrument.ask('S85'+laser_string)
         if reply == ('A85'+laser_string):
-            print 'Modulation Mode Wavelength 1 set to ' + wvl
+            print 'Modulation Mode Wavelength 1 set to ' + str(wvl)
         else:
             print 'Error: ' + reply
 
@@ -346,7 +347,7 @@ class Superlum_BS_1060(Instrument):
         laser_string = '%0*d' % (4, wvl2int(wvl))
         reply = self._visainstrument.ask('S86'+laser_string)
         if reply == ('A86'+laser_string):
-            print 'Modulation Mode Wavelength 1 set to ' + wvl
+            print 'Modulation Mode Wavelength 1 set to ' + str(wvl)
         else:
             print 'Error: ' + reply
 
@@ -359,5 +360,18 @@ class Superlum_BS_1060(Instrument):
             print 'Error ' + reply
 
     def do_set_Modulation_Mode_Frequency(self, freq):
+        if freq in freqs:
+            i = freqs.index(freq)
+            print i 
+            laser_string = '%0*d' % (2,(i+1))
+            print laser_string
+            reply = self._visainstrument.ask('S87'+laser_string)
+            if reply == ('A87'+laser_string):
+                print 'Modulation mode frequency set to ' + str(freq)
+            else:
+                print 'Error: ' + reply
+        else:
+            print 'Frequency not in allowed frequencies'
+            print 'Allowed frequencies' + str(freqs)
         return None
 
