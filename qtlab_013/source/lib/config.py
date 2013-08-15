@@ -56,7 +56,7 @@ class Config(gobject.GObject):
     def load_userconfig(self):
 #        filename = os.path.join(get_execdir(), 'userconfig.py')
         home = os.path.expanduser("~")
-	filename = os.path.join(home, '.qtlab')
+        filename = os.path.join(home, '.qtlab')
         if os.path.exists(filename):
             logging.debug('Loading userconfig from %s', filename)
             execfile(filename, {'config': self})
