@@ -18,6 +18,7 @@
 import gobject
 import os
 import sys
+from shutil import copyfile
 
 # for backward compatibility to python 2.5
 try:
@@ -53,10 +54,17 @@ class Config(gobject.GObject):
         self['execdir'] = get_execdir()
 
     def load_userconfig(self):
-        filename = os.path.join(get_execdir(), 'userconfig.py')
+#        filename = os.path.join(get_execdir(), 'userconfig.py')
+        home = os.path.expanduser("~")
+	filename = os.path.join(home, '.qtlab')
         if os.path.exists(filename):
             logging.debug('Loading userconfig from %s', filename)
             execfile(filename, {'config': self})
+	else:
+	    logging.debug('Userconfig not found, copying default config.')
+	    Default_Config = os.path.join(get_execdir(), 'userconfig.py')
+	    copyfile(Default_Config, filename)
+	    execfile(filename, {'config': self})
 
     def setup_tempdir(self):
         '''Get directory for temporary files.'''
