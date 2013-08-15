@@ -21,10 +21,10 @@ IF EXIST c:\python26\python.exe (
 :mark1
 :::::::::::::::::::::::CHECK THESE BITS:::::::::::::::::::::::::::
 :: Add gnuplot to PATH ("binary" folder for >= 4.4.0, "bin" folder for 4.3)
-SET PATH=%PYTHON_PATH%\Tools\gnuplot\bin;%PATH%
+::SET PATH=%PYTHON_PATH%\Tools\gnuplot\bin;%PATH%
 
 :: Add Console2 to PATH
-SET PATH=%PYTHON_PATH%\Tools\Console2\;%PATH%
+::SET PATH=%PYTHON_PATH%\Tools\Console2\;%PATH%
 
 :: Add GTK to PATH and set GTK_BASEPATH (not needed if using
 :: pygtk-all-in-one installer).
