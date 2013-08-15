@@ -6,3 +6,6 @@ qtlabgui.cfg
 *.lock
 *.bak
 *.tmp
+*~
+*.swp
+scripts/
