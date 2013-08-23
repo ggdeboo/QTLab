@@ -3,6 +3,8 @@ import os
 import sys
 import time
 import optparse
+import logging
+
 adddir = os.path.join(os.getcwd(), 'source')
 sys.path.insert(0, adddir)
 
@@ -13,13 +15,15 @@ from lib.network import object_sharer as objsh
 
 from lib.misc import get_traceback
 TB = get_traceback()()
-import logging
+
 f = logging.FileHandler(os.path.join(config['execdir'], 'qtlab_windows.log'), mode='a+')
 formatter = logging.Formatter(fmt='%(asctime)s %(levelname)-8s: %(message)s (%(filename)s:%(lineno)d)',
       datefmt='%Y-%m-%d %H:%M')
 f.setFormatter(formatter)
-f.setLevel(logging.DEBUG)
+f.setLevel(logging.WARNING)
+
 logging.getLogger('').addHandler(f)
+
 console = logging.StreamHandler()
 console.setLevel(logging.DEBUG)
 formatter = logging.Formatter('%(name)s: %(levelname)-8s %(message)s')
