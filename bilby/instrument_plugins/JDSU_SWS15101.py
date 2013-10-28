@@ -49,12 +49,14 @@ class JDSU_SWS15101(Instrument):
 
         self.add_parameter('power',
             flags=Instrument.FLAG_GETSET, units='mW', minval=0, maxval=10, type=types.FloatType)
+        self.add_parameter('diode_current',
+            flags=Instrument.FLAG_GETSET, units='mA', minval=0, maxval=150, type=types.FloatType)
         self.add_parameter('wavelength',
             flags=Instrument.FLAG_GETSET, units='nm', minval=1460, maxval=1600, type=types.FloatType)
         self.add_parameter('status',
             flags=Instrument.FLAG_GETSET, type=types.StringType)
         self.add_parameter('FSCWaveL',
-            flags=Instrument.FLAG_GETSET, units='nm', minval=-22.4, maxval=+22.4, type=types.FloatType)
+            flags=Instrument.FLAG_SET, units='pm', minval=-22.4, maxval=+22.4, type=types.FloatType)
         
         self.add_function ('get_all')
 
@@ -86,6 +88,7 @@ class JDSU_SWS15101(Instrument):
         '''
         logging.info(__name__ + ' : get all')
         self.get_power()
+        self.get_diode_current()
         self.get_wavelength()
         self.get_status()
 
@@ -121,6 +124,25 @@ class JDSU_SWS15101(Instrument):
         '''
         logging.debug(__name__ + ' : set power to %f' % pow)
         self._visainstrument.write('P=%s' % pow)
+
+    def do_get_diode_current(self):
+        '''
+        Read the diode current.
+        '''
+        logging.debug(__name__ + ' : get diode_current.')
+        I = self._visainstrument.ask('I?')
+        if I == ('DISABLED'):
+            logging.info(__name__ + ' : Output is disabled.')
+            return 0
+        else:
+            return float(I)
+
+    def do_set_diode_current(self, curr):
+        '''
+        Set the diode current.
+        '''
+        logging.debug(__name__ + ' : set diode_current to %.1f.' % curr)
+        self._visainstrument.write('I=%.1f' % curr)
 
     def do_get_wavelength(self):
         '''

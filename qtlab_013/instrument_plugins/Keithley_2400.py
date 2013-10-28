@@ -538,6 +538,9 @@ class Keithley_2400(Instrument):
         Set the voltage range for the voltage source mode.
         '''
         logging.debug('Setting the source voltage range of %s to %f.' % (self.get_name(), voltage_range))
+	if abs(self.get_source_voltage()) > abs(voltage_range):
+            logging.warning('Can not change the voltage range because the source voltage is larger than the voltage range.')
+            raise Warning('Source voltage is larger than the given voltage range. Change the source voltage first.')
         self._visainstrument.write(':SOUR:VOLT:RANG %f' %voltage_range)
         self.get_source_voltage_range() # Ask for the range that the source meter chose.
         
