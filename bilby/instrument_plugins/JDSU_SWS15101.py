@@ -34,8 +34,6 @@ class JDSU_SWS15101(Instrument):
 
     def __init__(self, name, address, reset=False):
         '''
-        Initializes the Agilent_E8257D, and communicates with the wrapper.
-
         Input:
           name (string)    : name of the instrument
           address (string) : GPIB address
@@ -131,11 +129,14 @@ class JDSU_SWS15101(Instrument):
         '''
         logging.debug(__name__ + ' : get diode_current.')
         I = self._visainstrument.ask('I?')
+        if (I[0] != 'I'):
+            logging.warning(__name__ + ' did not reply correctly: %s.' % I )
+            return 0
         if I == ('DISABLED'):
             logging.info(__name__ + ' : Output is disabled.')
             return 0
         else:
-            return float(I)
+            return float(I[2:])
 
     def do_set_diode_current(self, curr):
         '''
@@ -146,20 +147,23 @@ class JDSU_SWS15101(Instrument):
 
     def do_get_wavelength(self):
         '''
-        Reads the frequency of the signal from the instrument
+        Reads the wavelength from the laser
 
         Input:
             None
 
         Output:
-            freq (float) : Frequency in Hz
+            L (float) : Wavelength in nm
         '''
         logging.debug(__name__ + ' : get wavelength')
         '''return float(self._visainstrument.ask('L?'))
         '''
         L = self._visainstrument.ask('L?')
+        if (L[0] != 'L'):
+            logging.warning(__name__ + ' did not reply correctly: %s.' % L )
+            return 0
         if L == ('DISABLED'):
-            L = 0    
+            L = 0
         else:
             L = L[2:]
         return float(L)
