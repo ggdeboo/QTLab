@@ -279,10 +279,10 @@ class Instruments(SharedGObject):
             logging.warning('Instrument "%s" already exists, removing', name)
             self.remove(name)
 
-        # Set VISA provider
-        visa_driver = kwargs.get('visa', 'pyvisa')
-        import visa
-        visa.set_visa(visa_driver)
+#        # Set VISA provider
+#        visa_driver = kwargs.get('visa', 'pyvisa')
+#        import visa
+#        visa.set_visa(visa_driver)
 
         module = _get_driver_module(instype)
         if module is None:
