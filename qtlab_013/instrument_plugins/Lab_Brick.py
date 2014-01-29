@@ -50,8 +50,8 @@ class Lab_Brick(Instrument):
 
         self._modelname = labbrick.get_modelname(self._id)
         logging.info('Lab brick model connected: %s' % self._modelname)
-	minfreq = labbrick.get_min_frequency(self._id)
-	maxfreq = labbrick.get_max_frequency(self._id)
+	minfreq = labbrick.get_min_frequency(self._id)*10
+	maxfreq = labbrick.get_max_frequency(self._id)*10
 	minpower = labbrick.get_min_power(self._id)*0.25
 	maxpower = labbrick.get_max_power(self._id)*0.25
             
@@ -70,7 +70,18 @@ class Lab_Brick(Instrument):
         self.add_parameter('sweep_start_frequency',
             flags=Instrument.FLAG_GETSET,
             type=types.IntType,
-            units='Hz')
+            units='Hz',
+	    minval=minfreq,
+	    maxval=maxfreq)
+        self.add_parameter('sweep_end_frequency',
+            flags=Instrument.FLAG_GETSET,
+            type=types.IntType,
+            units='Hz',
+	    minval=minfreq,
+	    maxval=maxfreq)
+	self.add_parameter('rf_output',
+	    flags=Instrument.FLAG_GETSET,
+	    type=types.BooleanType)
 
         self.add_function('reset')
         self.add_function('close')
@@ -84,20 +95,24 @@ class Lab_Brick(Instrument):
         self.get_frequency()
 	self.get_power()
         self.get_sweep_start_frequency()
+	self.get_rf_output()
 
     def reset(self):
         '''Reset device.'''
 
     def do_get_frequency(self):
-        '''Get the frequency.'''
-        return labbrick.get_frequency(self._id)
+        '''
+	Get the frequency.
+	Frequency is communicated in steps of 10.
+	'''
+        return 10*labbrick.get_frequency(self._id)
 
     def do_set_frequency(self, freq):
         '''
         Set the frequency.
         Smallest unit is 10 Hz.
         '''
-        labbrick.set_frequency(self._id, int(round(freq, -1))) 
+        labbrick.set_frequency(self._id, int(round(0.1*freq, 0))) 
 
     def do_get_power(self):
         '''
@@ -110,18 +125,44 @@ class Lab_Brick(Instrument):
         '''
 	Set the power.
 	'''
-	labbrick.set_power_level(self._id, power*4)
+	labbrick.set_power_level(self._id, int(power*4))
 
     def do_get_sweep_start_frequency(self):
         '''Get the start frequency for a sweep.'''
-        return labbrick.get_start_frequency(self._id)
+        return 10*labbrick.get_start_frequency(self._id)
 
     def do_set_sweep_start_frequency(self):
         '''Set the start frequency for a sweep.'''
         labbrick.set_start_frequency(self._id, int(round(freq, -1)))
 
+    def do_get_sweep_end_frequency(self):
+        '''Get the start frequency for a sweep.'''
+        return 10*labbrick.get_end_frequency(self._id)
+
+    def do_set_sweep_end_frequency(self):
+        '''Set the start frequency for a sweep.'''
+        labbrick.set_end_frequency(self._id, int(round(freq, -1)))
+
+    def do_get_rf_output(self):
+        '''
+	Get the status of the RF output.
+	True: on
+	False: off
+	'''
+	return labbrick.get_rf_on(self._id)
+
+    def do_set_rf_output(self, output):
+        '''
+	Get the status of the RF output.
+	True: on
+	False: off
+	'''
+	if self.get_rf_output == output:
+	    logging.info('Output already is %s.' %output)
+	else:
+	    labbrick.set_rf_on(self._id, output)
+
     def close(self):
         '''
         Close the labbrick connection.
         '''
-        labbrick.close_device(self._id)

@@ -148,11 +148,17 @@ def get_max_power(device):
     return int(error_chk(LMShid.fnLMS_GetMaxPwr(DEVID(device))))
 
 def get_min_frequency(device):
-    '''Get the minimal settable frequency.'''
+    '''
+    Get the minimal settable frequency.
+    In steps of 10 Hz.
+    '''
     return int(error_chk(LMShid.fnLMS_GetMinFreq(DEVID(device))))
 
 def get_max_frequency(device):
-    '''Get the maximal settable frequency.'''
+    '''
+    Get the maximal settable frequency.
+    In steps of 10 Hz.
+    '''
     return int(error_chk(LMShid.fnLMS_GetMaxFreq(DEVID(device))))
 
 def get_sweep_time(device):
