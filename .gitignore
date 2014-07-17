@@ -1,7 +1,7 @@
 *.py[cod]
 *.log
-qtlab.bat
-qtlabgui.cfg
+qtlab_013/qtlab.bat
+qtlab_013/qtlabgui.cfg
 *.cfg
 *.lock
 *.bak
@@ -9,3 +9,4 @@ qtlabgui.cfg
 *~
 *.swp
 scripts/
+qtlab_013/userconfig.py
