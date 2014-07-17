@@ -92,7 +92,7 @@ class OxfordInstruments_IPS120(Instrument):
             2 : "Off magnet at field (switch closed)",
             5 : "Heater fault (heater is on but current is low)",
             8 : "No switch fitted"})
-        self.add_parameter('polarity', type=types.StringType,
+        self.add_parameter('polarity', type=types.IntType,
             flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET)
         self.add_parameter('field_setpoint', type=types.FloatType,
             flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET,
@@ -446,7 +446,7 @@ class OxfordInstruments_IPS120(Instrument):
             None
         '''
         logging.info(__name__ + ' : Setting target current to %s' % current)
-        self._execute('I%s' % current)
+        self._execute('I%3.3f' % round(current,3))	#rounding added by Joost
         self.get_field_setpoint() # Update field setpoint
 
     def do_get_sweeprate_current(self):
@@ -474,7 +474,7 @@ class OxfordInstruments_IPS120(Instrument):
             None
         '''
         logging.info(__name__ + ' : Set sweep rate (current) to %s Amps/min' % sweeprate)
-        self._execute('S%s' % sweeprate)
+        self._execute('S%1.3f' % round(sweeprate,3))	#rounding added by Joost
         self.get_sweeprate_field() # Update sweeprate_field
 
     def do_get_field(self):
@@ -515,7 +515,7 @@ class OxfordInstruments_IPS120(Instrument):
             None
         '''
         logging.info(__name__ + ' : Setting target field to %s' % field)
-        self._execute('J%s' % field)
+        self._execute('J%2.4f' % round(field,4))	#rounding added by Joost
         self.get_current_setpoint() #Update current setpoint
 
     def do_get_sweeprate_field(self):
@@ -543,7 +543,7 @@ class OxfordInstruments_IPS120(Instrument):
             None
         '''
         logging.info(__name__ + ' : Set sweep rate (field) to %s Tesla/min' % sweeprate)
-        self._execute('T%s' % sweeprate)
+        self._execute('T%1.4f' % round(sweeprate,4))	#rounding added by Joost
         self.get_sweeprate_current() # Update sweeprate_current
 
     def do_get_voltage_limit(self):
@@ -864,6 +864,7 @@ class OxfordInstruments_IPS120(Instrument):
             5 : "Tesla, Magnet sweep: slow"
             8 : "Amps, (Magnet sweep: unaffected)",
             9 : "Tesla, (Magnet sweep: unaffected)"
+True
 
         Output:
             None
@@ -917,7 +918,25 @@ class OxfordInstruments_IPS120(Instrument):
         }
         logging.info(__name__ + ' : Get device polarity')
         result = self._execute('X')
-        return status1.get(int(result[13]), "Unknown") + ", " + status2.get(int(result[14]), "Unknown")
+        logging.info(__name__ + ' : %s' % status1.get(int(result[13]), "Unknown") + ", %s" % status2.get(int(result[14]), "Unknown"))
+        return int(result[13])
+
+    def do_set_polarity(self,mode):
+	'''
+	created by Joost and Markus
+	Set polarity of the field
+	'''
+        status = {
+	0 : "No action",
+        1 : "Set positive current",
+        2 : "Set negative current",
+	4 : "Swap polarity"
+        }
+        if status.__contains__(mode):
+        	logging.info(__name__ + ' : Setting magnet activity to %s' % status.get(mode, "Unknown"))
+        	self._execute('P%s' % mode)
+        else:
+        	print 'Invalid mode inserted.'
 
     def get_changed(self):
         print "Current: "

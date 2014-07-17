@@ -220,7 +220,7 @@ class Instruments(SharedGObject):
         Input:
             typename (string)
         Output:
-            Tuple of (args, varargs, varkw, defaults)
+            Named Tuple of ArgSpec(args, varargs, varkw, defaults)
             args: argument names
             varargs: name of '*' argument
             varkw: name of '**' argument
