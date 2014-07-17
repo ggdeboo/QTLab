@@ -2,6 +2,7 @@
 # Guenevere Prawiroatmodjo <guen@vvtp.tudelft.nl>, 2009
 # Pieter de Groot <pieterdegroot@gmail.com>, 2009
 # Timothy Lucas <t.w.lucas@gmail.com>, 2011 (Waverunner 44XS driver adapted for Wavesurfer 104MXs-A)
+# Gabriele de Boo <ggdeboo@gmail.com>, 2014
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -25,6 +26,12 @@ import socket
 import numpy as np #added later..!
 import struct
 from numpy import linspace
+
+tdiv_options = [200e-9, 500e-9]
+for i in range(-9,3):
+    for j in [1, 2, 5]:
+        tdiv_options.append(round(j*10**i,-i))
+tdiv_options.append(1000)
 
 class LeCroy_Wavesurfer(Instrument):
     '''
@@ -116,29 +123,30 @@ class LeCroy_Wavesurfer(Instrument):
 		channel=ch_in,
 		)
         self.add_parameter('tdiv',
-            flags=Instrument.FLAG_GET,
+            flags=Instrument.FLAG_GETSET,
             type=types.FloatType,
-            units='s')
-        self.add_parameter('memsize',
-            flags=Instrument.FLAG_GET,
+            units='s',option_list=tdiv_options)
+        self.add_parameter('max_memsize',
+            flags=Instrument.FLAG_GETSET,
             type=types.IntType,
-            units='S')
+            units='S',option_list=(10000000,5000000,2500000,1000000,500000,100000,10000,1000,500))
         self.add_parameter('samplerate',
             flags=Instrument.FLAG_GET,
             type=types.IntType,
-            units='S/s')
-	self.add_parameter('trigger_source',
-	    flags=Instrument.FLAG_GET,
-	    type=types.StringType,
-	    )
-	self.add_parameter('trigger_type',
-	    flags=Instrument.FLAG_GET,
-	    type=types.StringType,
-	    )
+            units='S/s',option_list=(),minval=500,maxval=5e9)
+        self.add_parameter('trigger_source',
+            flags=Instrument.FLAG_GET,
+            type=types.StringType)
+        self.add_parameter('trigger_type',
+            flags=Instrument.FLAG_GET,
+            type=types.StringType,)
         
-	self.add_function('arm_acquisition')
-	self.add_function('get_all')
-	self.add_function('stop_acquisition')
+        self.add_function('arm_acquisition')
+        self.add_function('get_all')
+        self.add_function('stop_acquisition')
+        self.add_function('get_esr')
+        self.add_function('get_stb')
+        self.add_function('trigger')
         self.get_all()
 
 
@@ -159,7 +167,7 @@ class LeCroy_Wavesurfer(Instrument):
 	    self.get(ch_in+'_eres_bits')
 	    self.get(ch_in+'_eres_bandwidth')
         self.get('tdiv')
-        self.get('memsize')
+        self.get('max_memsize')
         self.get('samplerate')
 	self.get_trigger_source()
 	self.get_trigger_type()
@@ -196,7 +204,7 @@ class LeCroy_Wavesurfer(Instrument):
         response = self._visainstrument.ask('TDIV?')
         return float(response.lstrip('TDIV').rstrip('S'))  
     
-    def do_get_memsize(self):
+    def do_get_max_memsize(self):
         '''
         Get the memory size.
         '''
@@ -206,8 +214,9 @@ class LeCroy_Wavesurfer(Instrument):
     def do_get_samplerate(self):
         '''
         Get the sample rate.
+        The minimum samplerate is 500S/s, maximum 5GS/s.
         '''
-        return int(self.get_memsize()/(self.get_tdiv()*10))
+        return int(self.get_max_memsize()/(self.get_tdiv()*10))
 
     def do_get_voffset(self, channel):
         response = self._visainstrument.ask(channel+':OFFSET?')
@@ -283,7 +292,7 @@ class LeCroy_Wavesurfer(Instrument):
         logging.info(__name__ + ' : Take a screenshot with filename %s, type %s and save on harddisk %s' % (file, type, dir))
         self._visainstrument.write('HCSU DEV, %s, BCKG, %s, DEST, FILE, DIR, %s, FILE, %s, AREA, %s; SCDP' % (type, background, dir, file, area))
         
-    def set_timesteps(self, time):
+    def do_set_tdiv(self, time):
         '''
         Set timesteps used per scale unit to the scope
 
@@ -293,23 +302,23 @@ class LeCroy_Wavesurfer(Instrument):
         Output:
             none
         '''
-        logging.info(__name__ + ' : Acquiring timesteps from instrument')
+        logging.info(__name__ + ' : Setting tdiv on instrument')
         self._visainstrument.write('TDIV %s' % time)
         
 
-    def get_timesteps(self):
-        '''
-        Set timesteps used per scale unit to the scope
-
-        Input:
-            None
-
-        Output:
-            Timesteps (eg. 1 ms = 1E-6)
-        '''
-        logging.info(__name__ + ' : Getting timebase from the instrument')
-        timebase = self._visainstrument.ask_for_values('TDIV?', format = double )
-        return timebase
+#    def get_timesteps(self):
+#        '''
+#        Set timesteps used per scale unit to the scope
+#
+#        Input:
+#            None
+#
+#        Output:
+#            Timesteps (eg. 1 ms = 1E-6)
+#        '''
+#        logging.info(__name__ + ' : Getting timebase from the instrument')
+#        timebase = self._visainstrument.ask_for_values('TDIV?', format = double )
+#        return timebase
         
 
     def get_voltage_scale(self, channel):
@@ -342,23 +351,23 @@ class LeCroy_Wavesurfer(Instrument):
         self._visainstrument.write('C%s:VDIV %s' % (channel, voltage))
 
     def do_get_eres_bits(self, channel):
-	'''
-	Get the number of ERES bits for a channel.
-	Since I haven't figured out a direct command, we'll just extract it from a measured waveform.
-	'''
-	old_memsize = self.get_memsize()
-	self.set_memsize(500)
-	self.arm_acquisition()
+        '''
+        Get the number of ERES bits for a channel.
+        Since I haven't figured out a direct command, we'll just extract it from a measured waveform.
+        '''
+        old_memsize = self.get_max_memsize()
+        self.set_max_memsize(500)
+        self.arm_acquisition()
         self._visainstrument.write('COMM_FORMAT DEF9,WORD,BIN')
         rawdata = self._visainstrument.ask(channel+':WAVEFORM?')
 
-	self.set_memsize(old_memsize)
+        self.set_max_memsize(old_memsize)
         offset = 21
         nominal_bits = struct.unpack('h',rawdata[172+offset:174+offset])
         eres_bits = nominal_bits[0] - 8
-	if eres_bits == 8:
-	    eres_bits = 0
-	return eres_bits
+        if eres_bits == 8:
+            eres_bits = 0
+        return eres_bits
 
     def do_get_eres_bandwidth(self, channel):
 	'''
@@ -400,20 +409,30 @@ class LeCroy_Wavesurfer(Instrument):
         logging.info(__name__ + ' : Setting up waveform storage')
         self._visainstrument.write('STST %s, %s, AUTO, %s, FORMAT, %s' % (channel, destination, mode, filetype))
 
-    def set_memsize(self, memsize):
+    def do_set_max_memsize(self, memsize):
         '''
         Starts measuring data, saves the data and sends it to the computer
 
         Input:
-            Time to measure, Maximum measurement size (Inputs possible = 50
-            0, 1000, 2500, 5000, 10K, 25K, 50K, 100K, 250K, 500K, 1MA, 2.5MA, 5MA, 10MA, 25MA)
-            
+            Maximum measurement size (Inputs possible = 
+            500, 1000, 10K, 100K, 500K, 1MA, 2.5MA, 5MA, 10MA)
 
         Output:
             None
         '''
+        memsizes_list = {
+            500:'500',
+            1000:'1K',
+            10000:'10K',
+            100000:'100K',
+            500e3:'500K',
+            1e6:'1MA',
+            2.5e6:'2.5MA',
+            5e6:'5MA',
+            10e6:'10MA'}
         logging.debug(__name__ + ' : Setting memory size')
-        self._visainstrument.write('MSIZ %s' % memsize)
+        
+        self._visainstrument.write('MSIZ %s' % memsizes_list[memsize])
 
     def measure_waveform(self):
         '''
@@ -539,6 +558,22 @@ class LeCroy_Wavesurfer(Instrument):
 	Stop the acquisition.
 	'''
 	self._visainstrument.write('STOP')
+
+    def get_esr(self):
+        '''
+        Read out the Event Status Register 
+        '''
+        return self._visainstrument.ask('*ESR?')
+
+    def get_stb(self):
+        '''
+        Read out the Event Status Register 
+        '''
+        return self._visainstrument.ask('*STB?')
+
+    def trigger(self):
+        self._visainstrument.write('*TRG')
+
 
 # Next thing doesn't work yet, because in the transfer to the instrument visa throws away the \' needed to specify what file to get... Do not know how to solve this...
 # Also, remember that you need qt lab to wait until we are sure that the entire waveform for the specified time is 
