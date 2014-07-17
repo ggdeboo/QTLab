@@ -1,4 +1,4 @@
-# JDSU_SWS15101 driver
+# JDSU_SWS15101 driver July 4, 2014
 # 
 # Gabriele de Boo <g.deboo@student.unsw.edu.au>
 # Chunming Yin <c.yin@unsw.edu.au>
@@ -22,6 +22,7 @@ import visa
 import types
 import logging
 import numpy
+from time import sleep
 
 class JDSU_SWS15101(Instrument):
     '''
@@ -103,13 +104,34 @@ class JDSU_SWS15101(Instrument):
         logging.debug(__name__ + ' : get power')
         '''return float(self._visainstrument.ask('P?'))
         '''
-        P = self._visainstrument.ask('P?')
+# Make sure that the information in buffer has been read out.
+        attempt = 0
+        Stat_word = self._visainstrument.stb
+        while (Stat_word != 1) and (attempt<10):
+            self._visainstrument.read()
+            Stat_word = self._visainstrument.stb
+            attempt += 1
+            sleep(0.01)
+        if attempt >= 10:
+            logging.warning(__name__ + ' may not be running properly: Status Code %s.' % Stat_word)
+        self._visainstrument.write('P?')
+# Wait until the status word shows the parameter available for reading.
+        while ((Stat_word & 0b00010000) == 0) and (attempt<100):
+            Stat_word = self._visainstrument.stb
+            attempt += 1
+            sleep(0.01)
+        if attempt >= 100:
+            logging.warning(__name__ + ' may not be responding correctly: Status Code %s.' % Stat_word)
+
+        P = self._visainstrument.read()
         if P == ('DISABLED'):
-            P = 0    
+            return 0
+        elif (P[0] == 'P'):
+            return float(P[2:])
         else:
-            P = P[2:]
-        return float(P)
-    
+            logging.warning(__name__ + ' did not reply correctly: %s.' % P )
+            return 0
+
     def do_set_power(self, pow):
         '''
         Set the power of the signal
@@ -128,15 +150,33 @@ class JDSU_SWS15101(Instrument):
         Read the diode current.
         '''
         logging.debug(__name__ + ' : get diode_current.')
-        I = self._visainstrument.ask('I?')
-        if (I[0] != 'I'):
-            logging.warning(__name__ + ' did not reply correctly: %s.' % I )
-            return 0
+        attempt = 0
+        Stat_word = self._visainstrument.stb
+        while (Stat_word != 1) and (attempt<10):
+            self._visainstrument.read()
+            Stat_word = self._visainstrument.stb
+            attempt += 1
+            sleep(0.01)
+        if attempt >= 10:
+            logging.warning(__name__ + ' may not be running properly: Status Code %s.' % Stat_word)
+        self._visainstrument.write('I?')
+# Wait until the status word shows the parameter available for reading.
+        while ((Stat_word & 0b00010000) == 0) and (attempt<100):
+            Stat_word = self._visainstrument.stb
+            attempt += 1
+            sleep(0.01)
+        if attempt >= 100:
+            logging.warning(__name__ + ' may not be responding correctly: Status Code %s.' % Stat_word)
+        
+        I = self._visainstrument.read()
         if I == ('DISABLED'):
             logging.info(__name__ + ' : Output is disabled.')
             return 0
-        else:
+        elif (I[0] == 'I'):
             return float(I[2:])
+        else:
+            logging.warning(__name__ + ' did not reply correctly: %s.' % I )
+            return 0
 
     def do_set_diode_current(self, curr):
         '''
@@ -158,16 +198,35 @@ class JDSU_SWS15101(Instrument):
         logging.debug(__name__ + ' : get wavelength')
         '''return float(self._visainstrument.ask('L?'))
         '''
-        L = self._visainstrument.ask('L?')
-        if (L[0] != 'L'):
-            logging.warning(__name__ + ' did not reply correctly: %s.' % L )
-            return 0
+        attempt = 0
+        Stat_word = self._visainstrument.stb
+        while (Stat_word != 1) and (attempt<10):
+            self._visainstrument.read()
+            Stat_word = self._visainstrument.stb
+            attempt += 1
+            sleep(0.01)
+        if attempt >= 10:
+            logging.warning(__name__ + ' may not be running properly: Status Code %s.' % Stat_word)
+        self._visainstrument.write('L?')
+# Wait until the status word shows the parameter available for reading.
+        while ((Stat_word & 0b00010000) == 0) and (attempt<100):
+            Stat_word = self._visainstrument.stb
+            attempt += 1
+            sleep(0.01)
+        if attempt >= 100:
+            logging.warning(__name__ + ' may not be responding correctly: Status Code %s.' % Stat_word)
+        
+        L = self._visainstrument.read()
+
+
         if L == ('DISABLED'):
             L = 0
+        elif (L[0] == 'L'):
+            return float(L[2:])
         else:
-            L = L[2:]
-        return float(L)
-    
+            logging.warning(__name__ + ' did not reply correctly: %s.' % L )
+            return 0
+
     def do_set_wavelength(self, wavel):
         '''
         Set the frequency of the instrument
@@ -205,12 +264,11 @@ class JDSU_SWS15101(Instrument):
             status (string) : 'On' or 'Off'
         '''
         logging.debug(__name__ + ' : get status')
-        stat = self._visainstrument.ask('P?')
-
-        if (stat!='DISABLED'):
-          return 'enabled'
+        P = self.get_power()
+        if P == 0:
+            return 'DISABLED'
         else:
-          return 'disabled'
+            return 'ENABLED'
 
     def do_set_status(self, status):
         '''
