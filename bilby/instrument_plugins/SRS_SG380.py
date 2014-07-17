@@ -94,8 +94,10 @@ class SRS_SG380(Instrument):
             flags=Instrument.FLAG_GETSET, type=types.StringType)
 	self.add_parameter('rf_output_block_temperature',
             flags=Instrument.FLAG_GET, type=types.FloatType)
-	self.add_parameter('timebase',
-	    flags=Instrument.FLAG_GET, type=types.StringType)
+        self.add_parameter('timebase',
+            flags=Instrument.FLAG_GET, type=types.StringType)
+        self.add_parameter('list_mode',
+            flags=Instrument.FLAG_GETSET, type=types.BooleanType)
 ##        self.add_parameter('Frequency_List',
 ##            flags=Instrument.FLAG_SET, type=numpy.ndarray)
 ##        self.add_parameter('Power_List',
@@ -109,7 +111,13 @@ class SRS_SG380(Instrument):
 ##        self.add_function('List_sweep_freq_off')
 ##        self.add_function('List_sweep_power_on')
 ##        self.add_function('List_sweep_power_on')
-##        self.add_function('Trigger')
+        self.add_function('trigger')
+        self.add_function('list_on')
+        self.add_function('list_off')
+        self.add_function('create_list')
+        self.add_function('get_list_entry')
+        self.add_function('set_list_entry')
+        self.add_function('get_error')
 
 
         if (reset):
@@ -144,12 +152,13 @@ class SRS_SG380(Instrument):
         '''
         logging.info(__name__ + ' : get all')
         self.get_ntype_power()
-	self.get_bnc_power()
+        self.get_bnc_power()
         self.get_frequency()
         self.get_status()
-	self.get_bnc_output_status()
-	self.get_rf_output_block_temperature()
-	self.get_timebase()
+        self.get_bnc_output_status()
+        self.get_rf_output_block_temperature()
+        self.get_timebase()
+        self.get_list_mode()
 
     def do_get_ntype_power(self):
         '''
@@ -358,6 +367,96 @@ class SRS_SG380(Instrument):
 	timebase_dict = {'0':'Crystal', '1':'OCXO', '2':'Rubidium', '3':'External'}
 	return timebase_dict[self._visainstrument.ask('TIMB?')]
 
+    def trigger(self):
+        '''
+        Send a trigger to the instrument. Used for List mode.
+        '''
+        logging.debug(__name__ + ' : trigger')
+        self._visainstrument.write('*TRG')
+
+    def list_on(self):
+        self._visainstrument.write('LSTE 1')
+
+    def list_off(self):
+        self._visainstrument.write('LSTE 0')
+
+    def do_get_list_mode(self):
+        '''
+        Get whether the instrument is in list mode or not.
+        Returns True or False
+        '''
+        return bool(self._visainstrument.ask('LSTE?'))
+
+    def do_set_list_mode(self, on):
+        '''
+        Set whether the instrument is in list mode or not.
+        '''
+        self._visainstrument.write('LSTE %i' % on)
+
+    def get_list_entry(self, index):
+        '''
+        Get the list entry for a given index.
+        '''
+        self._visainstrument.write('LSTI %i' % index)
+        return self._visainstrument.ask('LSTI?')         
+
+    def set_list_entry(self, index, *args, **kwargs):
+        '''
+        list_entry creates a list state for the list mode of the instrument.
+        See page 80 of the manual.
+        '''
+        logging.debug(__name__ + ' : list_entry index %i' %index)
+        command_list = ['N']*15
+        if 'frequency' in kwargs:
+            command_list[0]=str(kwargs['frequency'])
+        if 'phase' in kwargs:
+            command_list[1]=str(kwargs['phase'])
+        if 'lf_amplitude' in kwargs:
+            command_list[2]=str(kwargs['lf_amplitude'])
+        if 'lf_offset' in kwargs:
+            command_list[3]=str(kwargs['lf_offset'])
+        if 'rf_amplitude' in kwargs:
+            command_list[4]=('%.2f' % kwargs['rf_amplitude'])
+        if 'font_panel_display' in kwargs:
+            if kwargs['front_panel_display'] in range(13):
+                command_list[5]=str(kwargs['front_panel_display'])
+            else:
+                logging.error('Incorrect value for front_panel_display.')
+        if 'enable_setting' in kwargs:
+            if kwargs['enable_setting'] in range(32):
+                command_list[6]=str(kwargs['enable_setting'])
+            else:
+                logging.error('Incorrect value for enable_setting')
+        if 'modulation_type' in kwargs:
+            '''
+            0 AM
+            1 FM
+            2 PhaseM
+            3 Sweep
+            4 Pulse
+            5 Blank
+            6 IQ (if option 3 is installed)
+            '''
+            if kwargs['modulation_type'] in range(7):
+                command_list[7]=str(kwargs['modulation_type'])
+        
+        command_string = ','.join(command_list)
+        logging.info(__name__ + ' : command list: LSTP %i %s' %(index,command_string))
+        self._visainstrument.write('LSTP %i,%s' %(index, command_string))
+
+    def create_list(self, size):
+        '''
+        Create a list with a certain size.
+        '''
+        answer = self._visainstrument.ask('LSTC? %i' % size)
+        if answer:
+            print 'List succesfully created.'
+        else:
+            print 'There was an error.'
+
+    def get_error(self):
+        return self._visainstrument.ask('LERR?')
+            
     # shortcuts
     def off(self):
         '''
