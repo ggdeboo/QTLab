@@ -112,6 +112,10 @@ class Keithley_2400(Instrument):
             type=types.FloatType,
             units='A',
             flags=Instrument.FLAG_GET)
+        self.add_parameter('voltage_reading',
+            type=types.FloatType,
+            units='V',
+            flags=Instrument.FLAG_GET)			
 
         self.add_function('beep')
 
@@ -611,12 +615,28 @@ class Keithley_2400(Instrument):
         Get the latest current reading.
         '''
         logging.debug('Getting the current reading of %s.' % self.get_name())
+        self._visainstrument.write(':SENS:FUNC "CURR"')
+        self._visainstrument.write(':FORM:ELEM CURR')
         if self.get_output_state():
-            return self._visainstrument.ask(':READ?').split(',')[1]
+            return self._visainstrument.ask(':READ?')
         else:
             logging.warning('Trying to read current of %s while the output is off.' % self.get_name())
 #            raise Warning('Trying to read current of %s while its output is off.' % self.get_name()) 
             return False
+			
+    def do_get_voltage_reading(self):
+        '''
+        Get the latest current reading.
+        '''
+        logging.debug('Getting the current reading of %s.' % self.get_name())
+        self._visainstrument.write(':SENS:FUNC "VOLT"')
+        self._visainstrument.write(':FORM:ELEM VOLT')
+        if self.get_output_state():
+            return self._visainstrument.ask(':READ?')
+        else:
+            logging.warning('Trying to read voltage of %s while the output is off.' % self.get_name())
+#            raise Warning('Trying to read current of %s while its output is off.' % self.get_name()) 
+            return False			
 
     def beep(self, freq=500, length=1):
         '''
