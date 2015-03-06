@@ -1,3 +1,4 @@
+# This Python file uses the following encoding: utf-8
 # Keithley_2400.py driver for Keithley 2400 Source Meter
 # Arjan Verduijn <a.verduijn@unsw.edu.au>
 # Gabriele de Boo <g.deboo@student.unsw.edu.au>
@@ -55,23 +56,19 @@ class Keithley_2400(Instrument):
         self._visainstrument.delay = 20e-3
         self._visainstrument.timeout = 1
         
-#        self._voltage_step = 50e-3
-#        self._voltage_step_time = 100e-3
-
         self.add_parameter('source_voltage',
             type=types.FloatType,
             tags=['sweep'],
-            maxstep=0.100, stepdelay=100,
+            maxstep=0.020, stepdelay=100,
             flags=Instrument.FLAG_GETSET, minval=-210, maxval=210, units='V')
         self.add_parameter('source_voltage_range',
             type=types.FloatType,
             flags=Instrument.FLAG_GETSET, minval=-210, maxval=210, units='V')
-#        self.add_parameter('source_current',
-#            type=types.FloatType,
-#            tags=['sweep'],
-#            maxstep=1e-6, stepdelay=100,
-#            flags=Instrument.FLAG_GETSET, minval=
-
+        self.add_parameter('source_current',
+            type=types.FloatType,
+            tags=['sweep'],
+            maxstep=1e-9, stepdelay=100,
+            flags=Instrument.FLAG_GETSET, minval=-1, maxval=1, units='A')
         self.add_parameter('current_compliance',
             type=types.FloatType,
             flags=Instrument.FLAG_GETSET, minval=0, maxval=1.05, units='A')
@@ -87,6 +84,9 @@ class Keithley_2400(Instrument):
             option_list=(
                 'FRONT',
                 'REAR'))
+        self.add_parameter('4_wire_mode',
+            type=types.BooleanType,
+            flags=Instrument.FLAG_GETSET)
         self.add_parameter('source_function',
             type=types.StringType,
             flags=Instrument.FLAG_GETSET,
@@ -112,11 +112,33 @@ class Keithley_2400(Instrument):
             type=types.FloatType,
             units='A',
             flags=Instrument.FLAG_GET)
+        self.add_parameter('current_measurement_range',
+            type=types.FloatType,
+            units='A',
+            flags=Instrument.FLAG_GET)			
         self.add_parameter('voltage_reading',
+            type=types.FloatType,
+            units='V',
+            flags=Instrument.FLAG_GET) 
+        self.add_parameter('voltage_measurement_range',
             type=types.FloatType,
             units='V',
             flags=Instrument.FLAG_GET)			
 
+        self.add_parameter('display_top',
+            type=types.StringType,
+            flags=Instrument.FLAG_GET)          
+        self.add_parameter('display_bottom',
+            type=types.StringType,
+            flags=Instrument.FLAG_GET)
+
+        self.add_parameter('concurrent_measurements',
+            type=types.BooleanType,
+            flags=Instrument.FLAG_GET)
+        self.add_parameter('concurrent_measurement_functions',
+            type=types.StringType,
+            flags=Instrument.FLAG_GET)
+			
         self.add_function('beep')
 
         if reset:
@@ -143,7 +165,13 @@ class Keithley_2400(Instrument):
         self.get_source_function()
         self.get_voltage_source_mode()
         self.get_current_source_mode()
-        
+        self.get_display_top()		
+        self.get_display_bottom()	
+        self.get_concurrent_measurements()	
+        self.get_concurrent_measurement_functions()		
+        self.get_voltage_measurement_range()
+        self.get_current_measurement_range()
+	self.get_4_wire_mode()
     
     def reset(self):
         '''
@@ -158,7 +186,7 @@ class Keithley_2400(Instrument):
         logging.debug('Resetting instrument to default GPIB operation')
         self._visainstrument.write('*RST')
 
-#    def set_voltage_ramp(self, voltage_step, voltage_step_time):
+#    def set_voltage_ramp(self, voltage_step, voltage_step_time): #this section was blanked out
 #        '''
 #        Set voltage ramp settings, default values set in "__init__"
 #
@@ -214,6 +242,7 @@ class Keithley_2400(Instrument):
 #            2: 'REAR'}
 #        logging.debug('Setting instrument to use ' + termlib[terminal] + ' terminals')
 #        self._visainstrument.write(':ROUT:TERM ' + termlib[terminal])
+
     def do_get_terminals(self):
         '''
         Get terminals that are used.
@@ -424,26 +453,26 @@ class Keithley_2400(Instrument):
         logging.debug('Select measurement range: ' + str(range) + flib[function])
         self._visainstrument.write(':SOUR:' + flib[function] +':RANG ' + str(range))
 
-    def set_source_amplitude(self, function, amplitude):
-        '''
-        Set source amplitude in volts or amps
-        
-        Input:
-            1           : voltage mode
-            2           : current mode
-            amplitude   : range in volts or amps
-        Output:
-            None
-        '''
-        flib = {
-            1: 'VOLT',
-            2: 'CURR'}
-        logging.debug('Set source amplitude to ' + str(amplitude))
-        self._visainstrument.write(':SOUR:' + flib[function] + ':LEV ' + str(amplitude))
+#    def set_source_amplitude(self, function, amplitude):
+#       '''
+#        Set source amplitude in volts or amps
+#        
+#        Input:
+#            1           : voltage mode
+#            2           : current mode
+#            amplitude   : range in volts or amps
+#        Output:
+#            None
+#        '''
+#        flib = {
+#            1: 'VOLT',
+#            2: 'CURR'}
+#        logging.debug('Set source amplitude to ' + str(amplitude))
+#        self._visainstrument.write(':SOUR:' + flib[function] + ':LEV ' + str(amplitude))
 
-    def set_measure_function(self, function):
+    def enable_measure_function(self, function):
         '''
-        Set measure function
+        Enables measure function
 
         Input:
             1: voltage function
@@ -452,10 +481,28 @@ class Keithley_2400(Instrument):
             None
         '''
         flib = {
-            1: 'VOLT',
-            2: 'CURR'}
+            1: '"VOLT"',
+            2: '"CURR"'}
         logging.debug('Set measure function to' + flib[function])
         self._visainstrument.write(':SENS:FUNC ' + flib[function])
+        self.get_concurrent_measurement_functions()
+		
+    def disable_measure_function(self, function):
+        '''
+        Disables measure function
+
+        Input:
+            1: voltage function
+            2: current function
+        Output:
+            None
+        '''
+        flib = {
+            1: '"VOLT"',
+            2: '"CURR"'}
+        logging.debug('Disable measure function of' + flib[function])
+        self._visainstrument.write(':SENS:FUNC:OFF ' + flib[function])
+        self.get_concurrent_measurement_functions()
 
 #    def set_compliance(self, function, compliance):
 #        '''
@@ -527,8 +574,28 @@ class Keithley_2400(Instrument):
         Output:
             None
         '''
-        logging.info("Set source voltage of %s to %f V." %(self.get_name(), V))
-        self._visainstrument.write(':SOUR:VOLT:LEV %f' % V)
+        logging.debug("Set source voltage of %s to %.3e V." %(self.get_name(), V))
+        self._visainstrument.write(':SOUR:VOLT:LEV %e' % V)
+        self._visainstrument.read() # to update the display
+        
+    def do_get_source_current(self):
+        '''
+        Get the current for the voltage source mode.
+        '''
+        logging.debug('Get source current.')
+        return float(self._visainstrument.ask(':SOUR:CURR:LEV:AMPL?'))  
+
+    def do_set_source_current(self, I):
+        '''
+        Set the current for the current source mode.
+        Input:
+            Current in A
+        Output:
+            None
+        '''
+        logging.debug("Set source current of %s to %.3e A." %(self.get_name(), I))
+        self._visainstrument.write(':SOUR:CURR:LEV %e' % I)     
+        self._visainstrument.read() # to update the display
 
     def do_get_source_voltage_range(self):
         '''
@@ -542,7 +609,7 @@ class Keithley_2400(Instrument):
         Set the voltage range for the voltage source mode.
         '''
         logging.debug('Setting the source voltage range of %s to %f.' % (self.get_name(), voltage_range))
-	if abs(self.get_source_voltage()) > abs(voltage_range):
+        if abs(self.get_source_voltage()) > abs(voltage_range):
             logging.warning('Can not change the voltage range because the source voltage is larger than the voltage range.')
             raise Warning('Source voltage is larger than the given voltage range. Change the source voltage first.')
         self._visainstrument.write(':SOUR:VOLT:RANG %f' %voltage_range)
@@ -583,11 +650,11 @@ class Keithley_2400(Instrument):
             voltage or current in volt or amps
         '''
         readmode = {
-            1 :	'voltage',
-            2 :	'current',
-            3 :	'resistance',
-            4 :	'timestamp',
-            5 :	'statusword'}
+            1 : 'voltage',
+            2 : 'current',
+            3 : 'resistance',
+            4 : 'timestamp',
+            5 : 'statusword'}
         data = self._visainstrument.ask(':READ?').split(',')
         logging.debug(__name__ + ' : Read output values from instrument')
         if type(value) == int:
@@ -624,19 +691,68 @@ class Keithley_2400(Instrument):
 #            raise Warning('Trying to read current of %s while its output is off.' % self.get_name()) 
             return False
 			
+    def do_get_current_measurement_range(self):
+        '''
+        Get the current measurement range from the sense subsystem.
+        '''
+        logging.debug('Getting the current measurement range of %s.' % self.get_name())
+        return self._visainstrument.ask(':SENS:CURR:RANG:UPP?')				
+            
     def do_get_voltage_reading(self):
         '''
         Get the latest current reading.
         '''
         logging.debug('Getting the current reading of %s.' % self.get_name())
-        self._visainstrument.write(':SENS:FUNC "VOLT"')
+#        self._visainstrument.write(':SENS:FUNC "VOLT"')
+        self.enable_measure_function(1)
         self._visainstrument.write(':FORM:ELEM VOLT')
         if self.get_output_state():
             return self._visainstrument.ask(':READ?')
         else:
             logging.warning('Trying to read voltage of %s while the output is off.' % self.get_name())
 #            raise Warning('Trying to read current of %s while its output is off.' % self.get_name()) 
-            return False			
+            return False            
+
+    def do_get_voltage_measurement_range(self):
+        '''
+        Get the voltage measurement range from the sense subsystem.
+        '''
+        logging.debug('Getting the voltage measurement range of %s.' % self.get_name())
+        return self._visainstrument.ask(':SENS:VOLT:RANG:UPP?')	
+			
+    def do_get_display_top(self):
+        '''
+        Get the message displayed on the top of the display.
+        '''
+        return self._visainstrument.ask(':DISP:WINDow1:DATA?').replace('\x10','μ')        
+
+    def do_get_display_bottom(self):
+        '''
+        Get the message displayed on the bottom of the display.
+        '''
+        return self._visainstrument.ask(':DISP:WINDow2:DATA?').replace('\x10','μ')    	
+
+    def do_get_concurrent_measurements(self):
+        answer = self._visainstrument.ask(':SENS:FUNC:CONC?')
+        return bool(answer)
+		
+    def do_get_concurrent_measurement_functions(self):
+        return self._visainstrument.ask(':SENS:FUNC:ON?')
+
+    def do_get_4_wire_mode(self):
+        '''
+        Get whether the instrument is in 4-wire mode.
+        '''
+        return bool(int(self._visainstrument.ask(':SYST:RSEN?')))
+
+    def do_set_4_wire_mode(self, mode):
+        '''
+        Set whether the instrument is in 4-wire mode.
+        '''
+        if mode:
+            self._visainstrument.write(':SYST:RSEN 1')
+        else:
+            self._visainstrument.write(':SYST:RSEN 0')
 
     def beep(self, freq=500, length=1):
         '''
