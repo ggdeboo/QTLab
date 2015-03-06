@@ -39,9 +39,9 @@ class Bristol_621(Instrument):
     def __init__(self, name, address=None, reset=False):
         Instrument.__init__(self,name)
         self.devHandle = CLOpenUSBSerialDevice(c_long(address))
-	logging.info('Device handle of Bristol wavemeter is %s' % self.devHandle)
+        logging.info('Device handle of Bristol wavemeter is %s' % self.devHandle)
         # Set wavelength reading to nm
-	CLSetLambdaUnits(c_int(self.devHandle), c_uint(0))
+        CLSetLambdaUnits(c_int(self.devHandle), c_uint(0))
 
         self.add_parameter('wavelength',
                 type=types.FloatType,
@@ -56,7 +56,7 @@ class Bristol_621(Instrument):
                 flags=Instrument.FLAG_GET,
                 units='mW')
 
-	self.add_function('close_device')
+        self.add_function('close_device')
 
         if reset:
             self.reset()
@@ -71,19 +71,21 @@ class Bristol_621(Instrument):
     def get_all(self):
         print __name__ + ' : reading all settings from instrument'
         self.get_wavelength()
-	self.get_power()
+        self.get_power()
 
 #### communication with machine
 
     def do_get_wavelength(self):
-	wavelength = CLGetLambdaReading(c_int(self.devHandle))
+        wavelength = None
+        while wavelength == None:
+            wavelength = CLGetLambdaReading(c_int(self.devHandle))
         logging.debug('Measured wavelength is %s.' % wavelength)
         return wavelength
 
     def do_get_power(self):
         power = CLGetPowerReading(c_int(self.devHandle))
         logging.debug('Measured power is %s.' % power)
-	return power
+        return power
 
     def close_device(self):
         if (CLCloseDevice(c_int(self.devHandle)) != 0):

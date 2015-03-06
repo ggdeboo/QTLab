@@ -227,15 +227,15 @@ class HP_3325B(Instrument):
         logging.debug(__name__ + ' : Setting the waveform function to %s.' % function)
         if function == 'DC':
             self._visainstrument.write('FU0')
-        if function == 'sine':
+        if function == 'SINE':
             self._visainstrument.write('FU1')
-        if function == 'square':
+        if function == 'SQUARE':
             self._visainstrument.write('FU2')
-        if function == 'triangle':
+        if function == 'TRIANGLE':
             self._visainstrument.write('FU3')
-        if function == 'positive ramp':
+        if function == 'POSITIVE RAMP':
             self._visainstrument.write('FU4')
-        if function == 'negative ramp':
+        if function == 'NEGATIVE RAMP':
             self._visainstrument.write('FU5')
 
     def do_get_amplitude_modulation_status(self):

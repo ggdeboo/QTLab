@@ -96,22 +96,25 @@ class Thorlabs_FiberSwitch(Instrument):
             raise Warning('The switch did not reply with the expected port.')
 
     def do_get_port1_wavelength(self):
-        self.set_active_port(1)
-        msleep(self.wait_time)
-        wavelength = self._wavemeter.get_wavelength()
-        return wavelength
+        if self.get_active_port() == 2:
+            self.set_active_port(1)
+            msleep(self.wait_time)
+        return self._wavemeter.get_wavelength()
 
     def do_get_port2_wavelength(self):
-        self.set_active_port(2)
-        msleep(self.wait_time)
+        if self.get_active_port() == 1:
+            self.set_active_port(2)
+            msleep(self.wait_time)
         return self._wavemeter.get_wavelength()
 
     def do_get_port1_power(self):
-        self.set_active_port(1)
-        msleep(self.wait_time)
+        if self.get_active_port()==2:
+            self.set_active_port(1)
+            msleep(self.wait_time)
         return self._wavemeter.get_power()
 
     def do_get_port2_power(self):
-        self.set_active_port(2)
-        msleep(self.wait_time)
+        if self.get_active_port()==1:
+            self.set_active_port(2)
+            msleep(self.wait_time)
         return self._wavemeter.get_power()

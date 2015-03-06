@@ -52,8 +52,8 @@ class JDSU_SWS15101(Instrument):
             flags=Instrument.FLAG_GETSET, units='mA', minval=0, maxval=150, type=types.FloatType)
         self.add_parameter('wavelength',
             flags=Instrument.FLAG_GETSET, units='nm', minval=1460, maxval=1600, type=types.FloatType)
-        self.add_parameter('status',
-            flags=Instrument.FLAG_GETSET, type=types.StringType)
+        self.add_parameter('output_status',
+            flags=Instrument.FLAG_GETSET, type=types.BooleanType)
         self.add_parameter('FSCWaveL',
             flags=Instrument.FLAG_SET, units='pm', minval=-22.4, maxval=+22.4, type=types.FloatType)
         
@@ -89,7 +89,7 @@ class JDSU_SWS15101(Instrument):
         self.get_power()
         self.get_diode_current()
         self.get_wavelength()
-        self.get_status()
+        self.get_output_status()
 
     def do_get_power(self):
         '''
@@ -253,7 +253,7 @@ class JDSU_SWS15101(Instrument):
         logging.debug(__name__ + ' : set FSCwavelength to %f' % FSCL)
         self._visainstrument.write('FSCL=%s' % FSCL)
 
-    def do_get_status(self):
+    def do_get_output_status(self):
         '''
         Reads the output status from the instrument
 
@@ -261,28 +261,27 @@ class JDSU_SWS15101(Instrument):
             None
 
         Output:
-            status (string) : 'On' or 'Off'
+            status (Boolean) : True for 'on' or False for 'off'
         '''
         logging.debug(__name__ + ' : get status')
         P = self.get_power()
         if P == 0:
-            return 'DISABLED'
+            return True
         else:
-            return 'ENABLED'
+            return False
 
-    def do_set_status(self, status):
+    def do_set_output_status(self, status):
         '''
         Set the output status of the instrument
 
         Input:
-            status (string) : 'On' or 'Off'
+            status (Boolean) : True or False
 
         Output:
             None
         '''
         logging.debug(__name__ + ' : set status to %s' % status)
-        if status.upper() in ('ENABLE', 'DISABLE'):
-            status = status.upper()
+        if status:
+            self._visainstrument.write('ENABLE')
         else:
-            raise ValueError('set_status(): can only set on or off')
-        self._visainstrument.write('%s' % status)
+            self._visainstrument.write('DISABLE')
