@@ -52,9 +52,22 @@ class Agilent_8648C(Instrument):
             flags=Instrument.FLAG_GETSET, units='dBm', minval=-136, maxval=13, type=types.FloatType)
         self.add_parameter('frequency',
             flags=Instrument.FLAG_GETSET, units='MHz', minval=9e-3, maxval=3.2e3, type=types.FloatType)
-        self.add_parameter('status',
-            flags=Instrument.FLAG_GETSET, type=types.StringType)
-
+        self.add_parameter('output_status',
+            flags=Instrument.FLAG_GETSET, type=types.BooleanType)
+        self.add_parameter('frequency_modulation_status',
+            flags=Instrument.FLAG_GET, type=types.BooleanType)
+        self.add_parameter('frequency_modulation_deviation',
+            flags=Instrument.FLAG_GET, type=types.FloatType, units='Hz')
+        self.add_parameter('frequency_modulation_source',
+            flags=Instrument.FLAG_GET, type=types.StringType,
+            option_list=('INT','EXT'))
+        self.add_parameter('amplitude_modulation_status',
+            flags=Instrument.FLAG_GET, type=types.BooleanType)
+        self.add_parameter('frequency_reference_status',
+            flags=Instrument.FLAG_GET, type=types.BooleanType)
+        self.add_parameter('automatic_attenuator_control_status',
+            flags=Instrument.FLAG_GET, type=types.BooleanType)
+                        
         self.add_function('reset')
         self.add_function('get_all')
         self.add_function('on')
@@ -124,7 +137,13 @@ class Agilent_8648C(Instrument):
         logging.info(__name__ + ' : get all')
         self.get_power()
         self.get_frequency()
-        self.get_status()
+        self.get_output_status()
+        self.get_frequency_modulation_status()
+        self.get_frequency_modulation_deviation()
+        self.get_frequency_modulation_source()
+        self.get_amplitude_modulation_status()
+        self.get_frequency_reference_status()
+        self.get_automatic_attenuator_control_status()
 
     def do_get_power(self):
         '''
@@ -136,7 +155,6 @@ class Agilent_8648C(Instrument):
         Output:
             ampl (float) : power in dBm
         '''
-
         logging.debug(__name__ + ' : get power')
         return float(self._visainstrument.ask('POW:AMPL?'))
 
@@ -232,7 +250,7 @@ class Agilent_8648C(Instrument):
            #self._visainstrument.write('FREQ:CW %s MHz' % v) 
          
 
-    def do_get_status(self):
+    def do_get_output_status(self):
         '''
         Reads the output status from the instrument
 
@@ -240,35 +258,132 @@ class Agilent_8648C(Instrument):
             None
 
         Output:
-            status (string) : 'on' or 'off'
+            status (Boolean) : True or False
         '''
         logging.debug(__name__ + ' : get status')
         stat = self._visainstrument.ask('OUTP:STAT?')
 
         if (stat=='1'):
-          return 'on'
+          return True
         elif (stat=='0'):
-          return 'off'
+          return False
         else:
           raise ValueError('Output status not specified : %s' % stat)
         return
 
-    def do_set_status(self, status):
+    def do_set_output_status(self, status):
         '''
         Set the output status of the instrument
 
         Input:
-            status (string) : 'on' or 'off'
+            status (Boolean) : True or False
 
         Output:
             None
         '''
         logging.debug(__name__ + ' : set status to %s' % status)
-        if status.upper() in ('ON', 'OFF'):
-            status = status.upper()
+#        if status.upper() in ('ON', 'OFF'):
+#            status = status.upper()
+#        else:
+#            raise ValueError('set_status(): can only set on or off')
+        if status:
+            self._visainstrument.write('OUTP:STAT ON')
         else:
-            raise ValueError('set_status(): can only set on or off')
-        self._visainstrument.write('OUTP:STAT %s' % status)
+            self._visainstrument.write('OUTP:STAT OFF')
+#        self._visainstrument.write('OUTP:STAT %s' % status)
+
+    def do_get_frequency_modulation_status(self):
+        '''
+        Input:
+            None
+        Output:
+            True or False
+        '''
+        logging.debug(__name__ + ' : get the frequency modulation status.')
+        answer = self._visainstrument.ask('FM:STAT?')
+        if answer == '1':
+            return True
+        elif answer == '0':
+            return False
+        else:
+            raise ValueError('Frequency modulation status not specified : %s' % answer)
+
+    def do_get_frequency_modulation_deviation(self):
+        '''
+        Input:
+            None
+        Output:
+            Frequency Deviation in Hz
+        '''
+        logging.debug(__name__ + ' : get the frequency modulation deviation.')
+        answer = self._visainstrument.ask('FM:DEV?')
+        return float(answer)
+
+    def do_get_frequency_modulation_source(self):
+        '''
+        Input:
+            None
+        Output:
+            INTERNAL
+            EXTERNAL
+        '''
+        logging.debug(__name__ + ' : get the frequency modulation source.')
+        answer = self._visainstrument.ask('FM:SOUR?')
+        if (answer == 'INTERNAL') or (answer == 'EXTERNAL'):
+            return answer
+        else:
+            raise ValueError('Frequency modulation source not specified: %s' % answer)
+
+    def do_get_amplitude_modulation_status(self):
+        '''
+        Get the amplitude modulation status.
+        Input:
+            None
+        Output:
+            True or False
+        '''
+        logging.debug(__name__ + ' : get the amplitude modulation status.')
+        answer = self._visainstrument.ask('AM:STAT?')
+        if answer == '0':
+            return False
+        elif answer == '1':
+            return True
+        else:
+            raise ValueError('Amplitude modulation status not specified: %s' % answer)
+
+    def do_get_frequency_reference_status(self):
+        '''
+        Get whether the frequency reference mode is off or on.
+        Input:
+            None
+        Output:
+            True or False
+        '''
+        logging.debug(__name__ + ' : get the frequency reference status.')
+        answer = self._visainstrument.ask('FREQ:REF:STAT?')
+        if answer == '0':
+            return False
+        elif answer == '1':
+            return True
+        else:
+            raise ValueError('Frequency reference status not specified: %s' % answer)
+
+    def do_get_automatic_attenuator_control_status(self):
+        '''
+        Get whether the automatic attenuator control is on or off.
+        Input:
+            None
+        Output:
+            True or False
+        '''
+        logging.debug(__name__ + ' : get the automatic attenuator control status.')
+        answer = self._visainstrument.ask('POW:ATT:AUTO?')
+        if answer == '0':
+            return False
+        elif answer == '1':
+            return True
+        else:
+            raise ValueError('Automatic attenuator control status not specified: %s' % answer)
 
     # shortcuts
     def off(self):
@@ -281,7 +396,7 @@ class Agilent_8648C(Instrument):
         Output:
             None
         '''
-        self.set_status('OFF')
+        self.set_output_status(False)
 
     def on(self):
         '''
@@ -293,5 +408,5 @@ class Agilent_8648C(Instrument):
         Output:
             None
         '''
-        self.set_status('ON')
+        self.set_output_status(True)
 
