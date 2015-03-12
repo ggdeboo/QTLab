@@ -1,3 +1,4 @@
+# This Python file uses the following encoding: utf-8
 # SRS_SG386.py class, to perform the communication between the Wrapper and the device
 # Chunming Yin 2013
 # Gabriele de Boo <ggdeboo@gmail.com> 2014
@@ -90,9 +91,30 @@ class SRS_SG380(Instrument):
             flags=Instrument.FLAG_GETSET, units='Hz', minval=1e-6, maxval=50e3, type=types.FloatType)
         self.add_parameter('Frequency_Modulation_Size',
             flags=Instrument.FLAG_GETSET, units='Hz', minval=0.1, maxval=32e6, type=types.FloatType)
+        self.add_parameter('modulation_coupling', 
+            flags=Instrument.FLAG_GETSET, type=types.StringType,
+            option_list=('DC', 'AC'))
+        self.add_parameter('modulation_function',
+            flags=Instrument.FLAG_GETSET, type=types.StringType,
+            option_list=('sine',
+                         'ramp',
+                         'triangle',
+                         'square',
+                         'noise',
+                         'external'))
+        self.add_parameter('modulation_type',
+            flags=Instrument.FLAG_GETSET, type=types.StringType,
+            option_list=('AM',
+                        'FM',
+                        'PhaseM',
+                        'sweep',
+                        'pulse',
+                        'blank',
+                        'IQ'))
+
         self.add_parameter('Modulation_State',
             flags=Instrument.FLAG_GETSET, type=types.StringType)
-	self.add_parameter('rf_output_block_temperature',
+        self.add_parameter('rf_output_block_temperature',
             flags=Instrument.FLAG_GET, type=types.FloatType)
         self.add_parameter('timebase',
             flags=Instrument.FLAG_GET, type=types.StringType)
@@ -159,6 +181,9 @@ class SRS_SG380(Instrument):
         self.get_rf_output_block_temperature()
         self.get_timebase()
         self.get_list_mode()
+        self.get_modulation_function()
+        self.get_modulation_coupling()
+        self.get_modulation_type()
 
     def do_get_ntype_power(self):
         '''
@@ -353,6 +378,110 @@ class SRS_SG380(Instrument):
         else:
             raise ValueError('set_status(): can only set on or off')
         self._visainstrument.write('MODL%s' % status)
+
+    def do_get_modulation_coupling(self):
+        '''
+        Get the modulation coupling
+        Output:
+            'DC'
+            'AC'
+        '''
+        logging.debug(__name__ + ' : get modulation coupling')
+        response = self._visainstrument.ask('COUP?')
+        if response == '0':
+            return 'AC'
+        elif response == '1':
+            return 'DC'
+        else:
+            logging.warning(__name__ + ' : answer to COUP? was not 0 or 1 : %s' % response)
+
+    def do_set_modulation_coupling(self, coupling):
+        '''
+        Set the modulation coupling
+        Input:
+            'AC'
+            'DC'
+        '''
+        logging.debug(__name__ + ' : set modulation coupling to %s' % coupling)
+        if coupling == 'AC':
+            self._visainstrument.write('COUP 0')
+        if coupling == 'DC':
+            self._visainstrument.write('COUP 1')
+
+    def do_get_modulation_function(self):
+        '''
+        Get the modulation function
+        0 Sine wave:    sine
+        1 Ramp:         ramp
+        2 Triangle:     triangle
+        3 Square:       square
+        4 Noise:        noise
+        5 External:     external 
+        '''
+        logging.debug(__name__ + ' : get the modulation function')
+        response = self._visainstrument.ask('MFNC?')
+        if response == '0':
+            return 'sine'
+        elif response == '1':
+            return 'ramp'
+        elif response == '2':
+            return 'triangle'
+        elif response == '3':
+            return 'square'
+        elif response == '4':
+            return 'noise'
+        elif response == '5':
+            return 'external'
+        else:
+            logging.warning(__name__ + ' : answer to MFNC? was not expected : %s' % response)
+
+    def do_set_modulation_function(self, function):
+        '''
+        '''
+        function_dict = {'SINE'     : 0,
+                         'RAMP'     : 1,
+                         'TRIANGLE' : 2,
+                         'SQUARE'   : 3,
+                         'NOISE'    : 4,
+                         'EXTERNAL' : 5}
+        logging.debug(__name__ + ' : set the modulation function to %s' % function)
+        self._visainstrument.write('MFNC %s' % function_dict[function])
+
+    def do_get_modulation_type(self):
+        '''
+        
+        '''
+        logging.debug(__name__ + ' : get the modulation type')
+        response = self._visainstrument.ask('TYPE?')
+        if response == '0':
+            return 'AM'
+        elif response == '1':
+            return 'FM'
+        elif response == '2':
+            return 'PhaseM'
+        elif response == '3':
+            return 'sweep'
+        elif response == '4':
+            return 'pulse'
+        elif response == '5':
+            return 'blank'
+        elif response == '6':
+            return 'IQ'
+        else:
+            logging.warning(__name__ + ' : answer to TYPE? was not expected : %s' % response)
+
+    def do_set_modulation_type(self, mtype):
+        '''
+        '''
+        type_dict = {    'AM'     : 0,
+                         'FM'     : 1,
+                         'PHASEM' : 2,
+                         'SWEEP'  : 3,
+                         'PULSE'  : 4,
+                         'BLANK'  : 5,
+                         'IQ'     : 6}
+        logging.debug(__name__ + ' : set the modulation type to %s' % mtype)
+        self._visainstrument.write('TYPE %s' % type_dict[mtype])
 
     def do_get_rf_output_block_temperature(self):
         '''
