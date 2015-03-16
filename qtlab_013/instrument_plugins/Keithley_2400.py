@@ -123,7 +123,8 @@ class Keithley_2400(Instrument):
         self.add_parameter('voltage_measurement_range',
             type=types.FloatType,
             units='V',
-            flags=Instrument.FLAG_GET)			
+            flags=Instrument.FLAG_GETSET,
+            minval=-210, maxval=210)			
 
         self.add_parameter('display_top',
             type=types.StringType,
@@ -138,6 +139,22 @@ class Keithley_2400(Instrument):
         self.add_parameter('concurrent_measurement_functions',
             type=types.StringType,
             flags=Instrument.FLAG_GET)
+        self.add_parameter('digits',
+            type=types.IntType,
+            flags=Instrument.FLAG_GETSET,
+            minval=4, maxval=7)
+        self.add_parameter('integration_rate',
+            type=types.FloatType,
+            flags=Instrument.FLAG_GETSET,
+            minval=0.01, maxval=10,
+            units='power line cycles')
+        self.add_parameter('auto_zero',
+            type=types.BooleanType,
+            flags=Instrument.FLAG_GETSET)
+        self.add_parameter('line_frequency',
+            type=types.FloatType,
+            flags=Instrument.FLAG_GET)
+
 			
         self.add_function('beep')
 
@@ -171,11 +188,16 @@ class Keithley_2400(Instrument):
         self.get_concurrent_measurement_functions()		
         self.get_voltage_measurement_range()
         self.get_current_measurement_range()
-	self.get_4_wire_mode()
+        self.get_4_wire_mode()
+        self.get_digits()
+        self.get_integration_rate()
+        self.get_auto_zero()
+        self.get_line_frequency()
     
     def reset(self):
         '''
-        Resets instrument to default setting for GPIB operation, i.e. manual trigger mode
+        Resets instrument to default setting for GPIB operation, i.e. manual 
+        trigger mode
 
         Input:
             None
@@ -719,7 +741,17 @@ class Keithley_2400(Instrument):
         '''
         logging.debug('Getting the voltage measurement range of %s.' % self.get_name())
         return self._visainstrument.ask(':SENS:VOLT:RANG:UPP?')	
-			
+
+    def do_set_voltage_measurement_range(self, value):
+        '''
+        Set the voltage measurement by providing the expected reading in V. The
+        instrument will adapt the range to accomodate this reading.
+        One of the following ranges will be selected: 0.2, 2, 20, 210
+        '''
+        logging.debug('Setting the voltage measurment range with expected \
+                        reading: %.1f' % value)
+        self._visainstrument.write(':SENS:VOLT:RANG:UPP %.1f' % value)
+
     def do_get_display_top(self):
         '''
         Get the message displayed on the top of the display.
@@ -753,6 +785,90 @@ class Keithley_2400(Instrument):
             self._visainstrument.write(':SYST:RSEN 1')
         else:
             self._visainstrument.write(':SYST:RSEN 0')
+
+    def do_get_digits(self):
+        '''
+        Get the number of digits that the display is showing.
+        '''
+        logging.debug(__name__ + ' : Get the number of digits on the display')
+        return int(self._visainstrument.ask('DISP:DIG?'))
+
+    def do_set_digits(self, dig):
+        '''
+        Set the number of digits. Minimum value is 4, maximum = 7.
+        '''
+        logging.debug(__name__ + ' : Set the number of digits to %i.' % dig)
+        self._visainstrument.write('DISP:DIG %i' % dig)
+
+    def do_get_integration_rate(self):
+        '''
+        Get the integration rate of the instrument. This is defined in number 
+        of power cycles with a minimum of 0.01 and a maximum of 10. 
+
+        When auto-zero is enabled the A/D conversion takes three times as
+        long. 
+
+        On the instrument the following settings are available:
+        FAST:        0.01 PLC, display resolution changed to 3.5 digits
+        MED:         0.10 PLC, display resolution changed to 4.5 digits
+        NORMAL:      1.00 PLC, display resolution changed to 5.5 digits
+        HI ACCURACY: 10.00 PLC, display resolution changed to 6.5 digits
+        OTHER:       any PLC value, display resolution is not changed
+        '''
+        logging.debug(__name__ + ' : Get the integration rate.')
+        return float(self._visainstrument.ask(':SENS:VOLT:NPLC?') )
+
+    def do_set_integration_rate(self, rate):
+        '''
+        Set the integration rate of the instrument. This is defined in number 
+        of power cycles with a minimum of 0.01 and a maximum of 10. 
+
+        When auto-zero is enabled the A/D conversion takes three times as
+        long. 
+
+        On the instrument the following settings are available:
+        FAST:        0.01 PLC, display resolution changed to 3.5 digits
+        MED:         0.10 PLC, display resolution changed to 4.5 digits
+        NORMAL:      1.00 PLC, display resolution changed to 5.5 digits
+        HI ACCURACY: 10.00 PLC, display resolution changed to 6.5 digits
+        OTHER:       any PLC value, display resolution is not changed
+        '''
+        logging.debug(__name__ + ' : Set the integration rate to %.2f' % rate)
+        self._visainstrument.write(':SENS:VOLT:NPLC %.2f' % rate)
+
+    def do_get_auto_zero(self):
+        '''
+        Get whether the auto zero is enabled or not. With auto zero disabled 
+        the analog to digital conversion is faster at the expense of long term 
+        drift, see page A-7 of the manual.
+        '''
+        logging.debug(__name__ + ' : Get whether the auto zero is on or off.')
+        answer = self._visainstrument.ask(':SYST:AZER:STAT?')
+        if answer == '1':
+            return True
+        elif answer == '0':
+            return False
+        else:
+            raise ValueError('Auto Zero state not specified: %s' % answer)
+
+    def do_set_auto_zero(self, azero):
+        '''
+        Set whether the auto zero is enabled or not. With auto zero disabled 
+        the analog to digital conversion is faster at the expense of long term 
+        drift, see page A-7 of the manual.
+        '''
+        logging.debug(__name__ + ' : Set the auto zero to %s .' % azero)
+        if azero:
+            self._visainstrument.write(':SYST:AZER:STAT 1')
+        else:
+            self._visainstrument.write(':SYST:AZER:STAT 0')
+    
+    def do_get_line_frequency(self):
+        '''
+        Get the line frequency.
+        '''
+        logging.debug(__name__ + ' : Get the line frequency.')
+        return float(self._visainstrument.ask(':SYST:LFR?'))  
 
     def beep(self, freq=500, length=1):
         '''
