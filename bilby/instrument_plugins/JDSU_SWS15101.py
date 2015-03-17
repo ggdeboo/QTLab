@@ -266,9 +266,9 @@ class JDSU_SWS15101(Instrument):
         logging.debug(__name__ + ' : get status')
         P = self.get_power()
         if P == 0:
-            return True
+            return False 
         else:
-            return False
+            return True
 
     def do_set_output_status(self, status):
         '''
