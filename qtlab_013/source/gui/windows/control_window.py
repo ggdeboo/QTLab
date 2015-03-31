@@ -97,6 +97,13 @@ class QTCreateInstrumentFrame(gtk.VBox):
         self._add_frame = gtk.Frame()
         self._add_frame.set_label(_L('Create'))
 
+        self._image_frame = gtk.AspectFrame(ratio=4.0,
+                                            obey_child=False)
+
+        self._image_frame.set_label(_L('Image of the instrument'))
+        self._ins_image = gtk.Image()
+        self._image_frame.add(self._ins_image)
+
         name_label = gtk.Label(_L('Name'))
         self._name_entry = gtk.Entry()
         self._name_entry.connect('changed', self._name_changed_cb)
@@ -129,7 +136,7 @@ class QTCreateInstrumentFrame(gtk.VBox):
         self._add_frame.add(vbox)
 
         vbox = gui.pack_vbox([
-            self._add_frame,
+            self._add_frame, self._image_frame,
             ], False,False)
         vbox.set_border_width(4)
         self.add(vbox)
@@ -143,6 +150,9 @@ class QTCreateInstrumentFrame(gtk.VBox):
         else:
             args = self._instruments.get_type_arguments(type_name)
         self._argument_table.set_arg_spec(args)
+
+        self._ins_image.set_from_file('instrument_plugins/images/%s.jpg' % type_name)
+        self._ins_image.show()
 
         self._update_add_button_sensitivity()
 
