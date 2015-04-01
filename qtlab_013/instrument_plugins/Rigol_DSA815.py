@@ -1,3 +1,4 @@
+#  -*- coding: utf-8 -*-
 # Rigol_DSA815.py class, to perform the communication between the Wrapper and the device
 # Markus Künzl <m.kunzl@unsw.edu.au>, 2014
 #
