@@ -174,7 +174,9 @@ class Keithley_2230(Instrument):
             out: none
         '''
         logging.debug('Sending voltage to instrument')
-        self._visainstrument.write('SOUR:APP CH%d,%fV' % (channel,v))
+        self._visainstrument.write('INST:SEL CH%d' % channel)
+        self._visainstrument.write('SOUR:VOLT %.3fV' % v)
+#        self._visainstrument.write('SOUR:APP CH%d,%fV' % (channel,v))
         return
 
     def do_get_current(self, channel):
@@ -194,6 +196,7 @@ class Keithley_2230(Instrument):
             out: current [A]
         '''
         logging.debug(__name__ + ': Setting current to %.3f' % I)
+        self._visainstrument.write('INST:SEL CH%d' % channel)
         self._visainstrument.write('SOUR:CURR %.3fA' % I)
         return
 
