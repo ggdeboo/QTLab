@@ -22,6 +22,7 @@ from gettext import gettext as _L
 
 import qtclient as qt
 import lib.gui as gui
+import os.path
 from lib.gui import dropdowns, qtwindow, frontpanel, slider
 from lib.gui.flexscale import FlexScale
 from lib.gui.functionframe import ArgumentTable, FunctionFrame
@@ -97,12 +98,20 @@ class QTCreateInstrumentFrame(gtk.VBox):
         self._add_frame = gtk.Frame()
         self._add_frame.set_label(_L('Create'))
 
-        self._image_frame = gtk.AspectFrame(ratio=4.0,
-                                            obey_child=False)
+        self._image_frame = gtk.AspectFrame(ratio=1.5,
+                                            obey_child=True)
 
         self._image_frame.set_label(_L('Image of the instrument'))
         self._ins_image = gtk.Image()
         self._image_frame.add(self._ins_image)
+
+        self._text_frame = gtk.Frame()
+        self._ins_text = gtk.TextView(buffer=None)
+        self._ins_text.set_editable(False)
+        self._ins_text.set_cursor_visible(False)
+        self._ins_text.set_wrap_mode(True)
+        self._ins_text_buffer = self._ins_text.get_buffer()
+        self._text_frame.add(self._ins_text)
 
         name_label = gtk.Label(_L('Name'))
         self._name_entry = gtk.Entry()
@@ -136,7 +145,7 @@ class QTCreateInstrumentFrame(gtk.VBox):
         self._add_frame.add(vbox)
 
         vbox = gui.pack_vbox([
-            self._add_frame, self._image_frame,
+            self._add_frame, self._image_frame, self._text_frame,
             ], False,False)
         vbox.set_border_width(4)
         self.add(vbox)
@@ -153,6 +162,16 @@ class QTCreateInstrumentFrame(gtk.VBox):
 
         self._ins_image.set_from_file('instrument_plugins/images/%s.jpg' % type_name)
         self._ins_image.show()
+
+        # text view window
+        if os.path.isfile('instrument_plugins/text/%s.txt' % type_name):
+            infile = open('instrument_plugins/text/%s.txt' % type_name)
+            string = infile.read()
+            infile.close()
+            self._ins_text_buffer.set_text(string)
+        else:
+            self._ins_text_buffer.set_text(type_name)
+        self._ins_text.show()
 
         self._update_add_button_sensitivity()
 

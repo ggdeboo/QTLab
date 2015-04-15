@@ -1,0 +1,1 @@
+The Keithley 2400 SourceMeter combines a precise, low-noise highly stable DC power supply with a low-noise, highly repeatable, high-impedance multimeter. It has 0.012% basic accuracy with 5½ digit resolution. At 5½ digits, the SourceMeter delivers 520 readings/second over the IEEE-488 bus. At 4½ digits, it can read up to 2000 readings/ second into its internal buffer.

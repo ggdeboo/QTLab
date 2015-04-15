@@ -1,0 +1,2 @@
+The Keithley 2000 multimeter is a 6½ digit multimeter.
+It can read 2000 readings/second at 4½ digits.

@@ -1,0 +1,4 @@
+SG380 Series RF Signal Generators
+SG382 : DC to 2.025 GHz
+SG384 : DC to 4.05  GHz
+SG386 : DC to 6.075 GHz

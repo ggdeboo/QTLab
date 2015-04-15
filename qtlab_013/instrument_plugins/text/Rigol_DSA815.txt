@@ -1,0 +1,2 @@
+Rigol DSA815 1.5 GHz Spectrum Analyzer
+9 kHz to 1.5 GHz Frequency Range
