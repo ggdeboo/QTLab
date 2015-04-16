@@ -114,14 +114,111 @@ class Rigol_DS1000E(Instrument):
         self.add_parameter('trigger_source',
             flags=Instrument.FLAG_GETSET,
             type=types.StringType,
-            channels=('EDGE','PULSE','SLOPE','VIDEO'),
-            channel_prefix='mode_%s_',
+            channels=('edge','pulse','slope','video'),
+            channel_prefix='%s_mode_',
             format_map={'CHAN1'  : 'channel 1',
                        'CHAN2'  : 'channel 2',
                        'EXT'    : 'external trigger channel',
                        'ACLINE' : 'mains supply'}
             )
+        self.add_parameter('trigger_level',
+            flags=Instrument.FLAG_GET,
+            type=types.FloatType,
+            channels=('edge','pulse','video'),
+            channel_prefix='%s_mode_'
+            )
+        self.add_parameter('trigger_sweep',
+            flags=Instrument.FLAG_GET,
+            type=types.StringType,
+            channels=('edge','pulse','slope','pattern','duration'),
+            channel_prefix='%s_mode_',
+            option_list=('AUTO','NORMAL','SINGLE'))
+        self.add_parameter('trigger_coupling',
+            flags=Instrument.FLAG_GET,
+            type=types.StringType,
+            channels=('edge','pulse','slope'),
+            channel_prefix='%s_mode_',
+            option_list=('DC','AC','HF','LF'))
+        self.add_parameter('trigger_holdoff',
+            flags=Instrument.FLAG_GET,
+            type=types.FloatType,
+            units='s')
+        self.add_parameter('trigger_status',
+            flags=Instrument.FLAG_GET,
+            type=types.StringType,
+            option_list=('run','stop','t`d','wait','auto'))
+        self.add_parameter('edge_mode_trigger_slope',
+            flags=Instrument.FLAG_GET,
+            type=types.StringType,
+            option_list=('positive','negative'))
 
+        # channel parameters
+        self.add_parameter('bandwidth_limit',
+            flags=Instrument.FLAG_GET,
+            type=types.BooleanType,
+            channels=(1,2),
+            channel_prefix='ch%i_')
+        self.add_parameter('coupling',
+            flags=Instrument.FLAG_GET,
+            type=types.StringType,
+            channels=(1,2),
+            channel_prefix='ch%i_',
+            option_list=('AC','DC','GND'))
+        self.add_parameter('display',
+            flags=Instrument.FLAG_GET,
+            type=types.BooleanType,
+            channels=(1,2),
+            channel_prefix='ch%i_')
+        self.add_parameter('invert',
+            flags=Instrument.FLAG_GET,
+            type=types.BooleanType,
+            channels=(1,2),
+            channel_prefix='ch%i_')
+        self.add_parameter('offset',
+            flags=Instrument.FLAG_GET,
+            type=types.FloatType,
+            channels=(1,2),
+            channel_prefix='ch%i_',
+            minval=-40,maxval=40,
+            units='V')
+        self.add_parameter('probe',
+            flags=Instrument.FLAG_GET,
+            type=types.IntType,
+            channels=(1,2),
+            channel_prefix='ch%i_',
+            option_list=(1,5,10,50,100,500,1000),
+            units='X')
+        self.add_parameter('scale',
+            flags=Instrument.FLAG_GET,
+            type=types.FloatType,
+            channels=(1,2),
+            channel_prefix='ch%i_',
+            units='V')
+        self.add_parameter('filter',
+            flags=Instrument.FLAG_GET,
+            type=types.BooleanType,
+            channels=(1,2),
+            channel_prefix='ch%i_')
+        self.add_parameter('memory_depth',
+            flags=Instrument.FLAG_GET,
+            type=types.IntType,
+            channels=(1,2),
+            channel_prefix='ch%i_',
+            minval=1, maxval=1e6)
+        self.add_parameter('vernier',
+            flags=Instrument.FLAG_GET,
+            type=types.BooleanType,
+            channels=(1,2),
+            channel_prefix='ch%i_')
+            
+        # measure parameters
+        self.add_parameter('counter_value',
+            flags=Instrument.FLAG_GET,
+            type=types.IntType)
+        self.add_parameter('counter_enabled',
+            flags=Instrument.FLAG_GET,
+            type=types.BooleanType)
+            
         
 #        for ch_in in self._input_channels:
 #            self.add_parameter('enhanced_resolution_bits_'+ch_in,
@@ -185,7 +282,8 @@ class Rigol_DS1000E(Instrument):
 #        self.add_function('stop_acquisition')
 #        self.add_function('get_esr')
 #        self.add_function('get_stb')
-#        self.add_function('trigger')
+        self.add_function('trigger')
+        self.add_function('get_waveform_data')
         self.get_all()
         print 'Rigol %s has been initialized.' % self._model
 
@@ -206,6 +304,34 @@ class Rigol_DS1000E(Instrument):
         self.get_timebase_format()
         self.get_trigger_mode()
 #        self.get_trigger_source()
+        self.get_trigger_holdoff()
+        self.get_trigger_status()
+        self.get_edge_mode_trigger_slope()
+        self.get_sampling_rate()
+        self.get_ch1_bandwidth_limit()
+        self.get_ch2_bandwidth_limit()
+        self.get_ch1_coupling()
+        self.get_ch2_coupling()
+        self.get_ch1_display()
+        self.get_ch2_display()
+        self.get_ch1_invert()
+        self.get_ch2_invert()
+        self.get_ch1_offset()
+        self.get_ch2_offset()
+        self.get_ch1_probe()
+        self.get_ch2_probe()
+        self.get_ch1_scale()
+        self.get_ch2_scale()
+        self.get_ch1_filter()
+        self.get_ch2_filter()
+        self.get_ch1_memory_depth()
+        self.get_ch2_memory_depth()
+        self.get_ch1_vernier()
+        self.get_ch2_vernier()
+
+        self.get_counter_value()
+
+        self.get_counter_enabled()
 
 #        for ch_in in self._input_channels:
 #            logging.info(__name__ + ' : Get '+ch_in)
@@ -380,7 +506,7 @@ class Rigol_DS1000E(Instrument):
         '''Get the trigger source.'''
         logging.debug(__name__ + ' : Get the trigger source for mode %s.' %
                         channel)
-        trg_mode = channel
+        trg_mode = channel.upper()
         response = self._visainstrument.ask(':TRIG:%s:SOUR?' % trg_mode)
         if response == 'CH1':
             return 'CHAN1'
@@ -410,6 +536,147 @@ class Rigol_DS1000E(Instrument):
         else:
             self._visainstrument.write(':TRIG:%s:SOUR %s' % 
                                         (trg_mode, trg_source))
+
+    def do_get_trigger_level(self, channel):
+        '''Get the trigger level.'''
+        logging.debug(__name__ + ' : Get the trigger level for the %s mode.'
+                        % channel)
+        response = self._visainstrument.ask(':TRIG:%s:LEV?' % channel)
+        return float(response)
+
+    def do_get_trigger_sweep(self, channel):
+        '''Get the trigger sweep setting.'''
+        logging.debug(__name__ + 
+                ' : Get the trigger sweep setting for the %s mode' % channel)
+        response = self._visainstrument.ask(':TRIG:%s:SWE?' % channel)
+        return response
+
+    def do_get_trigger_coupling(self, channel):
+        '''Get the trigger coupling.'''
+        logging.debug(__name__ +
+            ' : Get the trigger coupling setting for the %s mode' % channel)
+        response = self._visainstrument.ask(':TRIG:%s:COUP?' % channel)
+        return response
+
+    def do_get_trigger_holdoff(self):
+        '''Get the trigger holdoff.'''
+        logging.debug(__name__ + ' : Get the trigger holdoff time.')
+        response = self._visainstrument.ask(':TRIG:HOLD?')
+        return float(response)
+
+    def do_get_trigger_status(self):
+        '''Get the trigger status.'''
+        logging.debug(__name__ + ' : Get the trigger status.')
+        response = self._visainstrument.ask(':TRIG:STAT?')
+        return response.lower()
+
+    def do_get_edge_mode_trigger_slope(self):
+        '''Get the slope of the edge mode trigger.'''
+        logging.debug(__name__ + ' : Get the slope of the edge mode trigger.')
+        response = self._visainstrument.ask(':TRIG:EDGE:SLOP?')
+        return response.lower()
+
+    def do_get_bandwidth_limit(self, channel):
+        '''Get the bandwidth limit of an oscilloscope channel.'''
+        logging.debug(__name__ + 
+            ' : Get the bandwidth limit of oscilloscope channel %i' % channel)
+        response = self._visainstrument.ask(':CHAN%i:BWL?' % channel)
+        if response == 'ON':
+            return True
+        else:
+            return False
+
+    def do_get_coupling(self, channel):
+        '''Get the coupling of an oscilloscope channel.'''
+        logging.debug(__name__ +
+            ' : Get the coupling of oscilloscope channel %i' % channel)
+        response = self._visainstrument.ask(':CHAN%i:COUP?' % channel)
+        return response
+
+    def do_get_display(self, channel):
+        '''Get the On/Off state of an oscilloscope channel.'''
+        logging.debug(__name__ +
+            ' : Get the On/Off state of oscilloscope channel %i' % channel)
+        response = self._visainstrument.ask(':CHAN%i:DISP?' % channel)
+        if response == '1':
+            return True
+        else:
+            return False
+
+    def do_get_invert(self, channel):
+        '''Get whether the oscilloscope channel is inverted.'''
+        logging.debug(__name__ + 
+            ' : Get whether oscilloscope channel %i is inverted' % channel)
+        response = self._visainstrument.ask(':CHAN%i:INV?' % channel)
+        if response == 'ON':
+            return True
+        else:
+            return False
+
+    def do_get_offset(self, channel):
+        '''Get the offset of the oscilloscope channel.'''
+        logging.debug(__name__ + 
+            ' : Get the offset of oscilloscope channel %i' % channel)
+        response = self._visainstrument.ask(':CHAN%i:OFFS?' % channel)
+        return float(response)
+
+    def do_get_probe(self, channel):
+        '''Get the probe attenuation factor of the oscilloscope channel.'''
+        logging.debug(__name__ +
+            ' : Get the probe attenuation factor of oscilloscope channel %i' 
+            % channel)
+        response = self._visainstrument.ask(':CHAN%i:PROB?' % channel)
+        return int(float(response))
+
+    def do_get_scale(self, channel):
+        '''Get the scale of the oscilloscope channel.'''
+        logging.debug(__name__ +
+            ' : Get the scale of oscilloscope channel %i' % channel)
+        response = self._visainstrument.ask(':CHAN%i:SCAL?' % channel)
+        return float(response)
+
+    def do_get_filter(self, channel):
+        '''Get whether the filter of the oscilloscope channel is on or off.'''
+        logging.debug(__name__ +
+            ' : Get whether the filter is on or off on channel %i' % channel)
+        response = self._visainstrument.ask(':CHAN%i:FILT?' % channel)
+        if response == 'ON':
+            return True
+        else:
+            return False
+
+    def do_get_memory_depth(self, channel):
+        '''Get the memory depth of the oscilloscope channel.'''
+        logging.debug(__name__ + 
+            ' : Get the memory depth of oscilloscope channel %i' % channel)
+        response = self._visainstrument.ask(':CHAN%i:MEMoryDepth?' % channel)
+        return int(response)
+
+    def do_get_vernier(self, channel):
+        '''Get the vernier of the oscilloscope channel.'''
+        logging.debug(__name__ + 
+        ' : Get whether the vernier is on or off on oscilloscope channel %i'
+        % channel)
+        response = self._visainstrument.ask(':CHAN%i:VERN?' % channel)
+        if response == 'ON':
+            return True
+        else:
+            return False
+
+    def do_get_counter_value(self):
+        '''Get the counter value of the oscilloscope.'''
+        logging.debug(__name__ + ' : Get the counter value')
+        response = self._visainstrument.ask(':COUNter:VALue?')
+        return int(float(response))
+
+    def do_get_counter_enabled(self):
+        '''Get whether the counter is on or off.'''
+        logging.debug(__name__ + ' : Get whether the counter is enabled.')
+        response = self._visainstrument.ask(':COUN:ENAB?')
+        if response == 'ON':
+            return True
+        else:
+            return False
                         
 #    def do_get_memory_depth(self):
 #        '''Get the memory depth.'''
@@ -417,6 +684,30 @@ class Rigol_DS1000E(Instrument):
 #        response = self._visainstrument.ask(':ACQ:MEMD?')
 #        return response
 
+    def get_waveform_data(self, source, points_mode):
+        '''Read out the waveform data'''
+        points_mode_options = ('normal','maximum','raw')
+        source_options = ('ch1','ch2','math','fft') 
+        if points_mode in points_mode_options:
+            self._visainstrument.write(':WAV:POIN:MODE %s' %
+                                        points_mode.upper())
+        else:
+            print 'wrong mode'
+            return None
+        if source in source_options:
+            if source == 'ch1':
+                wvf_data = self._visainstrument.ask(':WAV:DATA? CHAN1')
+            if source == 'ch2':
+                wvf_data = self._visainstrument.ask(':WAV:DATA? CHAN2')
+            if source == 'math':
+                wvf_data = self._visainstrument.ask(':WAV:DATA? MATH')
+            if source == 'fft':
+                wvf_data = self._visainstrument.ask(':WAV:DATA? FFT')
+        else:
+            print 'wrong source'
+            print None
+        return wvf_data
+        
     def reset(self):
         '''
         Resets the instrument
@@ -431,7 +722,7 @@ class Rigol_DS1000E(Instrument):
         self._visainstrument.write('*RST')
         self._visainstrument.clear()
 
-#    def trigger(self):
-#        self._visainstrument.write('*TRG')
+    def trigger(self):
+        self._visainstrument.write(':FORC')
 
 
