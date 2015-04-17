@@ -20,9 +20,8 @@ import visa
 import types
 import logging
 import socket
-import numpy as np #added later..!
+from numpy import zeros, uint8, frombuffer
 import struct
-#from numpy import linspace
 
 #tdiv_options = [200e-9, 500e-9]
 #for i in range(-9,3):
@@ -30,7 +29,58 @@ import struct
 #        tdiv_options.append(round(j*10**i,-i))
 #tdiv_options.append(1000)
 
-class Rigol_DS1000E(Instrument):
+class WaveformReadout(object):
+    '''A class to handle the readout of waveforms.'''
+    def __init__(self):
+        self.test = 'blaat'
+        print 'Waveform readout initialized.'
+
+    def get_waveform_length(self, raw_data):
+        '''Extract the length of the waveform from the first 10 bytes.'''
+        return int(raw_data[2:10])
+
+    def get_proper_sampling_rate(self):
+        '''Get the proper sampling rate.'''
+        tdiv = self.get_timebase_scale()
+
+    def convert_raw_waveform_to_int_array(self, raw_data):
+#        wvf_length = self.get_waveform_length(raw_data)        
+#        int_array = zeros((wvf_length),dtype=uint8)
+
+#        for i in range(wvf_length):
+#            int_array[-i] = struct.unpack('B', raw_data[10+i:11+i])[0]
+        int_array = frombuffer(raw_data[10:], dtype=uint8)
+        return int_array
+
+    def get_raw_waveform_data(self, source, time_vector=False):
+        '''Read out the waveform data'''
+        trig_mode = self.get_trigger_mode()
+        if trig_mode == 'edge':
+            if not (self.get_edge_trigger_sweep() == 'SINGLE'):
+                logging.info('If the sweep mode is not single, the number ' + 
+                             'of points is limited to 600.')
+                
+        source_options = ('ch1','ch2','math','fft') 
+        if source in source_options:
+            if source == 'ch1':
+                wvf_data = self._visainstrument.ask(':WAV:DATA? CHAN1')
+            if source == 'ch2':
+                wvf_data = self._visainstrument.ask(':WAV:DATA? CHAN2')
+            if source == 'math':
+                wvf_data = self._visainstrument.ask(':WAV:DATA? MATH')
+            if source == 'fft':
+                wvf_data = self._visainstrument.ask(':WAV:DATA? FFT')
+        else:
+            print 'wrong source'
+            return None
+
+        if time_vector:
+            pass            
+
+        # struct.unpack('B', data)[0]
+        return wvf_data
+
+class Rigol_DS1000E(Instrument, WaveformReadout):
     '''
     This is the python driver for the Rigol DS1000E series oscilloscopes
    
@@ -63,6 +113,11 @@ class Rigol_DS1000E(Instrument):
         self._idn = self._visainstrument.ask('*IDN?')
         self._model = self._idn.lstrip('Rigol Technologies,')[:7]
 
+        self._timebase_options = [2e-9,5e-9]
+        for j in range(-8,2):
+            for i in [1, 2, 5]:
+                self._timebase_options.append(i*10**j)
+
         #self._visainstrument.delay = 20e-3
 
         self.add_parameter('trigger_slope',
@@ -92,6 +147,7 @@ class Rigol_DS1000E(Instrument):
 #            flags=Instrument.FLAG_GET,
 #            type=types.StringType,
 #            option_list=('LONG','NORMAL'))
+        # timebase
         self.add_parameter('timebase_mode',
             flags=Instrument.FLAG_GETSET,
             type=types.StringType,
@@ -101,6 +157,14 @@ class Rigol_DS1000E(Instrument):
             flags=Instrument.FLAG_GETSET,
             type=types.StringType,
             option_list=('XY', 'YT', 'SCAN')) 
+        self.add_parameter('timebase_scale',
+            flags=Instrument.FLAG_GETSET,
+            type=types.FloatType,
+            units='s/div',
+            option_list=self._timebase_options)
+            
+
+        # trigger
         self.add_parameter('trigger_mode',
             flags=Instrument.FLAG_GETSET,
             type=types.StringType,
@@ -128,7 +192,7 @@ class Rigol_DS1000E(Instrument):
             channel_prefix='%s_mode_'
             )
         self.add_parameter('trigger_sweep',
-            flags=Instrument.FLAG_GET,
+            flags=Instrument.FLAG_GETSET,
             type=types.StringType,
             channels=('edge','pulse','slope','pattern','duration'),
             channel_prefix='%s_mode_',
@@ -218,6 +282,12 @@ class Rigol_DS1000E(Instrument):
         self.add_parameter('counter_enabled',
             flags=Instrument.FLAG_GET,
             type=types.BooleanType)
+
+        self.add_parameter('waveform_points_mode',
+            flags=Instrument.FLAG_GETSET,
+            type=types.StringType,
+            option_list=('NORMAL','MAXIMUM','RAW'))
+            
             
         
 #        for ch_in in self._input_channels:
@@ -282,9 +352,12 @@ class Rigol_DS1000E(Instrument):
 #        self.add_function('stop_acquisition')
 #        self.add_function('get_esr')
 #        self.add_function('get_stb')
+        self.add_function('run')
         self.add_function('trigger')
         self.add_function('get_waveform_data')
+        self.add_function('weird_test')
         self.get_all()
+        WaveformReadout.__init__(self)
         print 'Rigol %s has been initialized.' % self._model
 
 
@@ -302,11 +375,14 @@ class Rigol_DS1000E(Instrument):
 #        self.get_memory_depth()
         self.get_timebase_mode()
         self.get_timebase_format()
+        self.get_timebase_scale()
+
         self.get_trigger_mode()
 #        self.get_trigger_source()
         self.get_trigger_holdoff()
         self.get_trigger_status()
         self.get_edge_mode_trigger_slope()
+        self.get_edge_mode_trigger_sweep()
         self.get_sampling_rate()
         self.get_ch1_bandwidth_limit()
         self.get_ch2_bandwidth_limit()
@@ -332,6 +408,7 @@ class Rigol_DS1000E(Instrument):
         self.get_counter_value()
 
         self.get_counter_enabled()
+        self.get_waveform_points_mode()
 
 #        for ch_in in self._input_channels:
 #            logging.info(__name__ + ' : Get '+ch_in)
@@ -466,6 +543,19 @@ class Rigol_DS1000E(Instrument):
         '''Get the sampling rate.'''
         logging.debug(__name__ + ' : Get the sampling rate.')
         response = self._visainstrument.ask(':ACQ:SAMP?')
+#        logging.warning('It is unclear what this sampling rate value represents.')
+        tdiv = self.get_timebase_scale()
+        correct_samplerate = {  5e-9 : 1e9,
+                               10e-9 : 1e9,
+                               20e-9 : 1e9,
+                               50e-9 : 1e9,
+                              100e-9 : 500e6,
+                              200e-9 : 250e6}
+        if tdiv < 500e-9:
+            # response from scope doesn't seem to be correct for a small
+            # timebase
+            return int(correct_samplerate[tdiv])
+            
         return int(float(response))
 
     def do_get_timebase_mode(self):
@@ -490,6 +580,17 @@ class Rigol_DS1000E(Instrument):
         logging.debug(__name__ + ' : Set the timebase format to %s.'
                       % tmb_format)
         self._visainstrument.write(':TIM:FORM %s' %tmb_format)
+
+    def do_get_timebase_scale(self):
+        '''Get the timebase scale in s.'''
+        logging.debug(__name__ + ' : Get the timebase scale.')
+        response = self._visainstrument.ask(':TIM:SCAL?')
+        return float(response)
+
+    def do_set_timebase_scale(self, scale):
+        '''Set the timebase scale in s.'''
+        logging.debug(__name__ + ' : Set the timebase scale to %f.' % scale)
+        self._visainstrument.write(':TIM:SCAL %.9f' % scale)
 
     def do_get_trigger_mode(self):
         '''Get the trigger mode.'''
@@ -550,6 +651,11 @@ class Rigol_DS1000E(Instrument):
                 ' : Get the trigger sweep setting for the %s mode' % channel)
         response = self._visainstrument.ask(':TRIG:%s:SWE?' % channel)
         return response
+
+    def do_set_trigger_sweep(self, swp_mode, channel):
+        logging.debug(__name__ + 
+                ' : Set the trigger sweep setting for the %s mode' % channel)
+        self._visainstrument.write(':TRIG:%s:SWE %s' % (channel, swp_mode))
 
     def do_get_trigger_coupling(self, channel):
         '''Get the trigger coupling.'''
@@ -684,29 +790,26 @@ class Rigol_DS1000E(Instrument):
 #        response = self._visainstrument.ask(':ACQ:MEMD?')
 #        return response
 
-    def get_waveform_data(self, source, points_mode):
+    def do_get_waveform_points_mode(self):
+        '''Get the points mode for obtaining a waveform.'''
+        response = self._visainstrument.ask(':WAV:POINTS:MODE?')
+        return response
+
+    def do_set_waveform_points_mode(self, points_mode):
+        self._visainstrument.write(':WAV:POIN:MODE %s' % points_mode)
+
+    def get_waveform_data(self, source):
         '''Read out the waveform data'''
-        points_mode_options = ('normal','maximum','raw')
-        source_options = ('ch1','ch2','math','fft') 
-        if points_mode in points_mode_options:
-            self._visainstrument.write(':WAV:POIN:MODE %s' %
-                                        points_mode.upper())
-        else:
-            print 'wrong mode'
-            return None
-        if source in source_options:
-            if source == 'ch1':
-                wvf_data = self._visainstrument.ask(':WAV:DATA? CHAN1')
-            if source == 'ch2':
-                wvf_data = self._visainstrument.ask(':WAV:DATA? CHAN2')
-            if source == 'math':
-                wvf_data = self._visainstrument.ask(':WAV:DATA? MATH')
-            if source == 'fft':
-                wvf_data = self._visainstrument.ask(':WAV:DATA? FFT')
-        else:
-            print 'wrong source'
-            print None
-        return wvf_data
+        self.set_waveform_points_mode('raw')
+        # If the points mode is set to normal, the oscilloscope will pad the 
+        # data points with sin(x)/x interpolation to get to 600 points in the
+        # time span of 12div*timebase.
+        # I don't know why you would want this, so by default the read out is
+        # in raw mode.
+        # The length of the output depends on whether one or two channels are
+        # being used and whether the long memory option is enabled.
+        data = self.get_raw_waveform_data(source)
+        return self.convert_raw_waveform_to_int_array(data)
         
     def reset(self):
         '''
@@ -722,7 +825,11 @@ class Rigol_DS1000E(Instrument):
         self._visainstrument.write('*RST')
         self._visainstrument.clear()
 
+    def run(self):
+        self._visainstrument.write(':RUN')
+
     def trigger(self):
         self._visainstrument.write(':FORC')
 
-
+    def weird_test(self):
+        print self.test
