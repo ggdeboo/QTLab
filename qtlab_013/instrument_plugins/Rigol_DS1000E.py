@@ -65,11 +65,11 @@ class WaveformReadout(object):
             if source == 'ch1':
                 self._visainstrument.write(':WAV:DATA? CHAN1')
             if source == 'ch2':
-                self._visainstrument.write(':WAV:DATA? CHAN1')
+                self._visainstrument.write(':WAV:DATA? CHAN2')
             if source == 'math':
-                self._visainstrument.write(':WAV:DATA? CHAN1')
+                self._visainstrument.write(':WAV:DATA? MATH')
             if source == 'fft':
-                self._visainstrument.write(':WAV:DATA? CHAN1')
+                self._visainstrument.write(':WAV:DATA? FFT')
             wvf_data = self._visainstrument.read_raw()
         else:
             print 'wrong source'
