@@ -30,7 +30,8 @@ class JDSU_SWS15101(Instrument):
 
     Usage:
     Initialize with
-    <name> = instruments.create('<name>', 'JDSU_SWS15101', address='<GPIB address>')
+    <name> = instruments.create('<name>', 'JDSU_SWS15101', 
+                                address='<GPIB address>')
     '''
 
     def __init__(self, name, address, reset=False):
@@ -45,21 +46,45 @@ class JDSU_SWS15101(Instrument):
         # Add some global constants
         self._address = address
         self._visainstrument = visa.instrument(self._address)
+        if self._visainstrument.interface_type == 4:
+            print('The JDSU laser is connected with the serial interface.')
+            self._visainstrument.term_chars = '\r'
+            self._visainstrument.baud_rate = 9600
+        self._visainstrument.clear()
 
         self.add_parameter('power',
-            flags=Instrument.FLAG_GETSET, units='mW', minval=0, maxval=10, type=types.FloatType)
+            flags=Instrument.FLAG_GETSET, 
+            units='mW', 
+            minval=0, maxval=10, 
+            type=types.FloatType)
         self.add_parameter('diode_current',
-            flags=Instrument.FLAG_GETSET, units='mA', minval=0, maxval=150, type=types.FloatType)
+            flags=Instrument.FLAG_GETSET, 
+            units='mA', 
+            minval=0, maxval=150, 
+            type=types.FloatType)
         self.add_parameter('wavelength',
-            flags=Instrument.FLAG_GETSET, units='nm', minval=1460, maxval=1600, type=types.FloatType)
+            flags=Instrument.FLAG_GETSET, 
+            units='nm', 
+            minval=1460, maxval=1600, 
+            type=types.FloatType)
+        self.add_parameter('frequency',
+            flags=Instrument.FLAG_GET,
+            units='GHz',
+            type=types.FloatType)
         self.add_parameter('output_status',
             flags=Instrument.FLAG_GETSET, type=types.BooleanType)
         self.add_parameter('FSCWaveL',
-            flags=Instrument.FLAG_SET, units='pm', minval=-22.4, maxval=+22.4, type=types.FloatType)
+            flags=Instrument.FLAG_SET, # Inst has no command to read FSC
+            units='pm', 
+            minval=-22.4, maxval=+22.4, 
+            type=types.FloatType)
+        self.add_parameter('current_limited',
+            flags=Instrument.FLAG_GET,
+            type=types.BooleanType)
         
         self.add_function ('get_all')
+        self.get_all()
 
-        #self.get_all()
     def reset(self):
         '''
         Resets the instrument to default values
@@ -89,7 +114,9 @@ class JDSU_SWS15101(Instrument):
         self.get_power()
         self.get_diode_current()
         self.get_wavelength()
+        self.get_frequency()
         self.get_output_status()
+        self.get_current_limited()
 
     def do_get_power(self):
         '''
@@ -105,6 +132,18 @@ class JDSU_SWS15101(Instrument):
         '''return float(self._visainstrument.ask('P?'))
         '''
 # Make sure that the information in buffer has been read out.
+        if self._visainstrument.interface_type == 4:
+            # Serial communication
+            response = self._visainstrument.ask('P?')
+            response = response.lstrip('> ')
+            if response.startswith('P='):
+                return float(response.lstrip('P='))
+            elif response == 'DISABLED':
+                return 0
+            else:
+                logging.warning(__name__ + 
+                ' get_power : incorrect response: %s' % response)
+    
         attempt = 0
         Stat_word = self._visainstrument.stb
         while (Stat_word != 1) and (attempt<10):
@@ -113,7 +152,8 @@ class JDSU_SWS15101(Instrument):
             attempt += 1
             sleep(0.01)
         if attempt >= 10:
-            logging.warning(__name__ + ' may not be running properly: Status Code %s.' % Stat_word)
+            logging.warning(__name__ + 
+            ' may not be running properly: Status Code %s.' % Stat_word)
         self._visainstrument.write('P?')
 # Wait until the status word shows the parameter available for reading.
         while ((Stat_word & 0b00010000) == 0) and (attempt<100):
@@ -121,7 +161,8 @@ class JDSU_SWS15101(Instrument):
             attempt += 1
             sleep(0.01)
         if attempt >= 100:
-            logging.warning(__name__ + ' may not be responding correctly: Status Code %s.' % Stat_word)
+            logging.warning(__name__ + 
+            ' may not be responding correctly: Status Code %s.' % Stat_word)
 
         P = self._visainstrument.read()
         if P == ('DISABLED'):
@@ -144,12 +185,26 @@ class JDSU_SWS15101(Instrument):
         '''
         logging.debug(__name__ + ' : set power to %f' % pow)
         self._visainstrument.write('P=%s' % pow)
+        return self._check_response()
 
     def do_get_diode_current(self):
         '''
         Read the diode current.
         '''
         logging.debug(__name__ + ' : get diode_current.')
+
+        if self._visainstrument.interface_type == 4:
+            # Serial communication
+            response = self._visainstrument.ask('I?')
+            response = response.lstrip('> ')
+            if response.startswith('I='):
+                return float(response.lstrip('I='))
+            elif response == 'DISABLED':
+                return 0
+            else:
+                logging.warning(__name__ + 
+                ' get_power : incorrect response: %s' % response)
+
         attempt = 0
         Stat_word = self._visainstrument.stb
         while (Stat_word != 1) and (attempt<10):
@@ -158,7 +213,8 @@ class JDSU_SWS15101(Instrument):
             attempt += 1
             sleep(0.01)
         if attempt >= 10:
-            logging.warning(__name__ + ' may not be running properly: Status Code %s.' % Stat_word)
+            logging.warning(__name__ + 
+            ' may not be running properly: Status Code %s.' % Stat_word)
         self._visainstrument.write('I?')
 # Wait until the status word shows the parameter available for reading.
         while ((Stat_word & 0b00010000) == 0) and (attempt<100):
@@ -166,7 +222,8 @@ class JDSU_SWS15101(Instrument):
             attempt += 1
             sleep(0.01)
         if attempt >= 100:
-            logging.warning(__name__ + ' may not be responding correctly: Status Code %s.' % Stat_word)
+            logging.warning(__name__ + 
+            ' may not be responding correctly: Status Code %s.' % Stat_word)
         
         I = self._visainstrument.read()
         if I == ('DISABLED'):
@@ -184,6 +241,7 @@ class JDSU_SWS15101(Instrument):
         '''
         logging.debug(__name__ + ' : set diode_current to %.1f.' % curr)
         self._visainstrument.write('I=%.1f' % curr)
+        return self._check_response()
 
     def do_get_wavelength(self):
         '''
@@ -196,9 +254,20 @@ class JDSU_SWS15101(Instrument):
             L (float) : Wavelength in nm
         '''
         logging.debug(__name__ + ' : get wavelength')
-        '''return float(self._visainstrument.ask('L?'))
-        '''
         attempt = 0
+
+        if self._visainstrument.interface_type == 4:
+            # Serial communication
+            response = self._visainstrument.ask('L?')
+            response = response.lstrip('> ')
+            if response.startswith('L='):
+                return float(response.lstrip('L='))
+#            elif response == 'DISABLED':
+#                return 0
+            else:
+                logging.error(__name__ + 
+                ' get_power : incorrect response: %s' % response)
+
         Stat_word = self._visainstrument.stb
         while (Stat_word != 1) and (attempt<10):
             self._visainstrument.read()
@@ -206,7 +275,8 @@ class JDSU_SWS15101(Instrument):
             attempt += 1
             sleep(0.01)
         if attempt >= 10:
-            logging.warning(__name__ + ' may not be running properly: Status Code %s.' % Stat_word)
+            logging.warning(__name__ + 
+            ' may not be running properly: Status Code %s.' % Stat_word)
         self._visainstrument.write('L?')
 # Wait until the status word shows the parameter available for reading.
         while ((Stat_word & 0b00010000) == 0) and (attempt<100):
@@ -214,7 +284,8 @@ class JDSU_SWS15101(Instrument):
             attempt += 1
             sleep(0.01)
         if attempt >= 100:
-            logging.warning(__name__ + ' may not be responding correctly: Status Code %s.' % Stat_word)
+            logging.warning(__name__ + 
+            ' may not be responding correctly: Status Code %s.' % Stat_word)
         
         L = self._visainstrument.read()
 
@@ -227,18 +298,35 @@ class JDSU_SWS15101(Instrument):
             logging.warning(__name__ + ' did not reply correctly: %s.' % L )
             return 0
 
+    def do_get_frequency(self):
+        '''Get the optical frequency of the laser'''
+        logging.debug(__name__ + ': Getting the optical frequency.')
+        if self._visainstrument.interface_type == 4:
+            # Serial communication
+            response = self._visainstrument.ask('f?')
+            response = response.lstrip('> ')
+            if response.startswith('f='):
+                return float(response.lstrip('f='))
+            else:
+                logging.error(__name__ + 
+                ' get_power : incorrect response: %s' % response)
+        else:
+            response = self._visainstrument.ask('f?')
+            return float(response.lstrip('f='))
+
     def do_set_wavelength(self, wavel):
         '''
-        Set the frequency of the instrument
+        Set the coarse wavelength of the laser
 
         Input:
-            freq (float) : Frequency in Hz
+            wavel (float) : wavelength in nm
 
         Output:
             None
         '''
         logging.debug(__name__ + ' : set wavelength to %f' % wavel)
         self._visainstrument.write('L=%s' % wavel)
+        return self._check_response()
 
     def do_set_FSCWaveL(self, FSCL):
         '''
@@ -252,6 +340,7 @@ class JDSU_SWS15101(Instrument):
         '''
         logging.debug(__name__ + ' : set FSCwavelength to %f' % FSCL)
         self._visainstrument.write('FSCL=%s' % FSCL)
+        return self._check_response()
 
     def do_get_output_status(self):
         '''
@@ -285,3 +374,50 @@ class JDSU_SWS15101(Instrument):
             self._visainstrument.write('ENABLE')
         else:
             self._visainstrument.write('DISABLE')
+        return self._check_response()
+
+    def do_get_current_limited(self):
+        '''Get whether the current is limited'''
+        logging.debug(__name__ + ' : get current limited')
+        if self._visainstrument.interface_type == 4:
+            # Serial communication
+            response = self._visainstrument.ask('LIMIT?')
+            response = response.lstrip('> ')
+            if response == 'YES':
+                return True
+            elif response == 'NO':
+                return False
+            else:
+                logging.error(__name__ + 
+                ' get_power : incorrect response: %s' % response)
+        else:
+            # GPIB communication
+            response = self._visainstrument.ask('f?')
+            if response == 'YES':
+                return True
+            elif response == 'NO':
+                return False
+            else:
+                logging.error(__name__ + 
+                ' get_power : incorrect response: %s' % response)
+
+    def _check_response(self):
+        '''Check whether the instrument has finished executing.
+        
+        For serial communication the instrument should write an 'OK' back
+        Other options are:
+            Value error     Value outside valid limits
+            Command error   Syntax error
+        '''
+        if self._visainstrument.interface_type == 4:
+            response = self._visainstrument.read()
+            if response.lstrip('> ') == 'OK':
+                return True
+            elif response.lstrip('> ') == 'COMMAND ERROR':
+                logging.warning(__name__ + ' set_wavelength : Command error')
+            elif response.lstrip('> ') == 'VALUE ERROR':
+                logging.warning(__name__ + ' set_wavelength : Value error')
+            else:
+                logging.warning(__name__ + 
+                ' set_wavelength : Did not receive OK, but %s' % response)
+        
