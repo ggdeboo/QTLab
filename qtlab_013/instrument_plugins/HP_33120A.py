@@ -30,6 +30,9 @@ from qt import msleep
 #   trigger_state { cont, external, gpib }
 #   function_shape { see below }
 #2 put above in get_all()
+def get_bit_set(byteval, idx):
+    '''Return True if a certain bit is set.'''
+    return bool(((byteval&(1<<idx))!=0))
 
 class HP_33120A(Instrument):
     '''
@@ -38,8 +41,8 @@ class HP_33120A(Instrument):
 
     Usage:
     Initialize with
-    <name> = instruments.create('<name>', 'HP_33120A', address='<GPIB address>',
-        reset=<bool>)
+    <name> = instruments.create('<name>', 'HP_33120A', 
+                                address='<GPIB address>', reset=<bool>)
     '''
 
     def __init__(self, name, address, reset=False):
@@ -61,10 +64,12 @@ class HP_33120A(Instrument):
 #        self._visainstrument.baud_rate = 9600L
         self._visainstrument.term_chars = '\n'
         self._visainstrument.timeout = 2.0
-        print 'Instrument identification string: %s' % self._visainstrument.ask('*IDN?')
+        print('Instrument identification string: %s' 
+                % self._visainstrument.ask('*IDN?'))
         event_register = self.get_event_register()
         if event_register > 128:
-            print __name__ + ' : Power has been turned off and on since the last time the driver was loaded.'
+            print(__name__ + ' : Power has been turned off and on since the'+
+                             ' last time the driver was loaded.')
 
         self.wait_time = 0.3 # if the instrument generates an error, it takes at least 0.3 s for it to finish a query
 
@@ -78,6 +83,9 @@ class HP_33120A(Instrument):
                 flags=Instrument.FLAG_GETSET,
                 minval=0, maxval=10,
                 units='V')
+        self.add_parameter('amplitude_units',
+                type=types.StringType,
+                flags=Instrument.FLAG_GET)
         self.add_parameter('offset',
                 type=types.FloatType,
                 flags=Instrument.FLAG_GETSET,
@@ -164,13 +172,10 @@ class HP_33120A(Instrument):
 
     def get_all(self):
         self.get_frequency()
-#        sleep(0.1)
         self.get_amplitude()
-#        sleep(0.1)
+        self.get_amplitude_units()
         self.get_offset()
-#        sleep(0.1)
         self.get_burst_count()
-#        sleep(0.1)
         self.get_output_function()
         self.get_last_error_message()
         self.get_trigger_source()
@@ -196,20 +201,20 @@ class HP_33120A(Instrument):
     def set_trigger_continuous(self):
         logging.debug(__name__ + ' : Set trigger to continuous')
         self._visainstrument.write('TRIG:SOUR IMM')
-	msleep(self.wait_time)
-	return self.check_event_register()
+        msleep(self.wait_time)
+        return self.check_event_register()
 
     def set_trigger_external(self):
         logging.debug(__name__ + ' : Set trigger to external')
         self._visainstrument.write('TRIG:SOUR EXT')
-	msleep(self.wait_time)
-	return self.check_event_register()
+        msleep(self.wait_time)
+        return self.check_event_register()
 
     def set_trigger_gpib(self):
         logging.debug(__name__ + ' : Set trigger to gpib')
         self._visainstrument.write('TRIG:SOUR BUS')
-	msleep(self.wait_time)
-	return self.check_event_register()
+        msleep(self.wait_time)
+        return self.check_event_register()
 
     def get_trigger_state(self):
         logging.debug(__name__ + ' : Getting trigger state')
@@ -224,8 +229,8 @@ class HP_33120A(Instrument):
     def do_set_burst_count(self, cnt):
         logging.debug(__name__ + ' : Setting burst count')
         self._visainstrument.write('BM:NCYC %d' % cnt)
-	msleep(self.wait_time)
-	return self.check_event_register()
+        msleep(self.wait_time)
+        return self.check_event_register()
 
     def do_get_burst_count(self):
         logging.debug(__name__ + ' : Getting burst count')
@@ -237,8 +242,8 @@ class HP_33120A(Instrument):
         '''
         logging.debug(__name__ + ' : Setting burst status')
         self._visainstrument.write('BM:STAT %s' % stat)
-	msleep(self.wait_time)
-	return self.check_event_register()
+        msleep(self.wait_time)
+        return self.check_event_register()
 
     def do_get_burst_status(self):
         '''
@@ -267,8 +272,8 @@ class HP_33120A(Instrument):
     def do_set_frequency(self, freq):
         logging.debug(__name__ + ' : Setting frequency')
         self._visainstrument.write('SOUR:FREQ %f' % freq)
-	msleep(self.wait_time)
-	return self.check_event_register()
+        sleep(self.wait_time)
+        return self.check_event_register()
 
     def do_get_frequency(self):
         logging.debug(__name__ + ' : Getting frequency')
@@ -277,16 +282,23 @@ class HP_33120A(Instrument):
     def do_set_amplitude(self, amp):
         logging.debug(__name__ + ' : Setting amplitude')
         if self.get_output_function() != 'DC':
-            self._visainstrument.write('SOUR:VOLT %f' % amp)
-	    msleep(self.wait_time)
-	    return self.check_event_register()
+            self._visainstrument.write('SOUR:VOLT %.3f' % amp)
+            sleep(0.1) # A hard sleep is really needed before checking the
+                       # event register.
+            return self.check_event_register()
         else:
-            logging.info(__name__ + ' : Trying to adjust amplitude while in DC mode.')
+            logging.info(__name__ + 
+                        ' : Trying to adjust amplitude while in DC mode.')
             return False
 
     def do_get_amplitude(self):
         logging.debug(__name__ + ' : Getting amplitude')
         return self._visainstrument.ask('SOUR:VOLT?')
+
+    def do_get_amplitude_units(self):
+        '''Get the units of the amplitude. Should return VPP, VRMS or DBM.'''
+        logging.debug(__name__ + ' : Getting the amplitude units')
+        return self._visainstrument.ask('SOUR:VOLT:UNIT?')
 
     def do_set_offset(self, offset):
         logging.debug(__name__ + ' : Setting offset')
@@ -324,13 +336,15 @@ class HP_33120A(Instrument):
             # frequency bounds depend on the length of the waveform
             return 'user'
         else:
-            logging.warning(__name__ + ' : answer to FUNC:SHAP? was not expected : %s' % response)
+            logging.warning(__name__ + 
+                ' : answer to FUNC:SHAP? was not expected : %s' % response)
 
     def do_set_output_function(self, function):
         '''
         Set the output function.
         '''
-        logging.debug(__name__ + ' : Setting the output function to %s' % function)
+        logging.debug(__name__ + 
+                ' : Setting the output function to %s' % function)
         function_dict = {
                         'SINUSOID' : 'SIN',
                         'SQUARE'   : 'SQU',
@@ -348,11 +362,11 @@ class HP_33120A(Instrument):
                         'DC'       : None,
                         'USER'     : None}
         self._visainstrument.write('FUNC:SHAP %s' % function_dict[function])
-	msleep(self.wait_time)
-	if bounds_dict[function]:
-		self.set_parameter_bounds('frequency',
-				bounds_dict[function][0],
-				bounds_dict[function][1])
+        msleep(self.wait_time)
+        if bounds_dict[function]:
+            self.set_parameter_bounds('frequency',
+                                    bounds_dict[function][0],
+                                    bounds_dict[function][1])
 	return self.check_event_register()
         
     def do_get_last_error_message(self):
@@ -382,34 +396,57 @@ class HP_33120A(Instrument):
 
     def check_event_register(self):
         '''
-        Check whether the operation was completed successfully by reading out the event register.
+        Check whether the operation was completed successfully by reading 
+        out the standard event register.
         If it wasn't raise an execution error with the error message.
         '''
-#	try:
-#            event_register = int(self._visainstrument.ask('*ESR?'))#
-#	except VisaIOError:
-#            print 'error'
-#	    msleep(1.0)
-        event_register = int(self._visainstrument.ask('*ESR?'))
+        if self.get_message_available:
+            logging.debug(__name__ + 
+                            ': There is something in the output buffer')
+        response = self._visainstrument.ask('*ESR?')
+        event_register = int(response)
 
         if event_register == 0:
             # Operation Complete
             return True
-        elif event_register > 128:
+        if get_bit_set(event_register, 2):
+            # Query Error
+            raise Exception(__name__+ ' : Query Error:' 
+                            + self.get_last_error_message())
+        if get_bit_set(event_register, 3):
+            # Device Error
+            raise Exception(__name__+ ' : Device Error:' 
+                            + self.get_last_error_message())
+        if get_bit_set(event_register, 4):
+            # Execution Error
+            raise Exception(__name__+ ' : Execution Error:' 
+                            + self.get_last_error_message())
+        if get_bit_set(event_register, 5):
+            # Command Error
+            raise Exception(__name__+ ' : Command Error:' 
+                            + self.get_last_error_message())
+        if get_bit_set(event_regsiter, 7):
+            # Power On
             raise Exception(__name__ + ': Has been turned off and on.')
-        else:
-            raise Exception(__name__+ ' : ' + self.get_last_error_message())
+            
+#        elif event_register == 4:
+#            # Message Available Bit (MAV) is set
+#        elif event_register > 128:
+#            raise Exception(__name__ + ': Has been turned off and on.')
+#        else:
+#            print event_register
+#            raise Exception(__name__+ ' : ' + self.get_last_error_message())
              
     def operation_complete_query(self):
         '''
         This is only used in the triggered burst mode and triggered sweep mode.
         '''
-        return self._visainstrument.ask('*OPC?')
+        return bool(int(self._visainstrument.ask('*OPC?')))
 
     def do_get_trigger_source(self):
-	'''
-	Get the trigger source.
-	'''
+        '''
+        Get the trigger source.
+        '''
         logging.debug(__name__ + ' : Getting the trigger source.')
         return self._visainstrument.ask('TRIG:SOUR?')
 
@@ -422,8 +459,8 @@ class HP_33120A(Instrument):
             BUS
         '''
         logging.debug(__name__ + ' : Setting the trigger source to %s.' % source)
-	self._visainstrument.write('TRIG:SOUR %s' % source)
-	msleep(self.wait_time)
+        self._visainstrument.write('TRIG:SOUR %s' % source)
+        msleep(self.wait_time)
         return self.check_event_register()
 
     def do_get_output_termination(self):
@@ -446,7 +483,8 @@ class HP_33120A(Instrument):
         LOW : 50 Ohm
         HIGH : Open circuit
         '''
-        logging.debug(__name__ + ' Set the output termination to %s.' % termination)
+        logging.debug(__name__ + 
+                    ' Set the output termination to %s.' % termination)
         if termination == 'LOW':
             self._visainstrument.write('OUTP:LOAD 50')
         else:
@@ -503,3 +541,15 @@ class HP_33120A(Instrument):
             return 'BOTH'
         else:
             return 'EXT'
+
+    def get_message_available(self):
+        '''
+        Query the status byte to see if there is a message.
+        '''
+        response = self._visainstrument.ask('*STB?')
+        if get_bit_set(int(response),4):
+            return True
+        else:
+            return False
+        
+    
