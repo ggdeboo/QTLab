@@ -69,19 +69,26 @@ class Keithley_2230(Instrument):
         # Add parameters to wrapper
         self.add_parameter('voltage',
             flags=Instrument.FLAG_GETSET,
-            units='V', minval=0, maxval=30, type=types.FloatType, channels=(1,2,3))
+            units='V', minval=0, maxval=30, type=types.FloatType, 
+            channels=(1,2,3))
         self.add_parameter('voltage_reading',
             flags=Instrument.FLAG_GET,
-            units='V', minval=0, maxval=30, type=types.FloatType, channels=(1,2,3))
+            units='V', minval=0, maxval=30, type=types.FloatType, 
+            channels=(1,2,3))
         self.add_parameter('current',
             flags=Instrument.FLAG_GETSET,
-            units='A', minval=0, maxval=5, type=types.FloatType, channels=(1,2,3))
+            units='A', minval=0, maxval=5, type=types.FloatType, 
+            channels=(1,2,3))
         self.add_parameter('current_reading',
             flags=Instrument.FLAG_GET,
-            units='A', minval=0, maxval=5, type=types.FloatType, channels=(1,2,3))
+            units='A', minval=0, maxval=5, type=types.FloatType, 
+            channels=(1,2,3))
         self.add_parameter('active',
             flags=Instrument.FLAG_GETSET,
             type=types.BooleanType, channels=(1,2,3))
+#        self.add_parameter('remote_status',
+#            flags=Instrument.FLAG_GETSET,
+#            type=types.BooleanType)
         # Add functions to wrapper
 
         self.set_parameter_bounds('voltage3', 0, 6)
@@ -90,6 +97,7 @@ class Keithley_2230(Instrument):
 
         self.add_function('reset')
         self.add_function('get_all')
+        self.add_function('set_remote')
 
 
 
@@ -236,6 +244,9 @@ class Keithley_2230(Instrument):
         self._visainstrument.write('INST:SEL CH%d' % channel)
         self._visainstrument.write('CHAN:OUTP %s' % bool_to_str(a))
         return
+
+    def set_remote(self):
+        self._visainstrument.write('SYST:REM')
 
 
 
