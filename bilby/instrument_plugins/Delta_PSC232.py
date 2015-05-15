@@ -37,6 +37,11 @@ class Delta_PSC232(Instrument):
         self._address = address
 #	self._term_chars = '\n\r\x04'
         self._channel_list = channel_list
+        self.minvoltage_list = minvoltage_list
+        self.maxvoltage_list = maxvoltage_list
+        self.mincurrent_list = mincurrent_list
+        self.maxcurrent_list = maxcurrent_list
+
         self._visains = visa.instrument(address) #, term_chars = "\n\r\x04") # Hoo Rah
         self._visains.baud_rate = 4800
         self._visains.timeout = 0.2
@@ -121,11 +126,15 @@ class Delta_PSC232(Instrument):
         
         These are accurate for the ES 030-5 power supplies
         '''
-        for channel in self._channel_list:
-            self.set('ch%i_minimum_voltage' % channel, 0)
-            self.set('ch%i_maximum_voltage' % channel, 30)
-            self.set('ch%i_minimum_current' % channel, 0)
-            self.set('ch%i_maximum_current' % channel, 5)
+        for idx, channel in enumerate(self._channel_list):
+            self.set('ch%i_minimum_voltage' % channel,
+                                        self.minvoltage_list[idx])
+            self.set('ch%i_maximum_voltage' % channel, 
+                                        self.maxvoltage_list[idx])
+            self.set('ch%i_minimum_current' % channel,
+                                        self.mincurrent_list[idx])
+            self.set('ch%i_maximum_current' % channel, 
+                                        self.maxcurrent_list[idx])
             self.set_parameter_options('ch%i_voltage' % channel, value=0.0)
             self.set_parameter_options('ch%i_current' % channel, value=0.0)
         # it doesn't like getting these commands twice...
@@ -135,7 +144,7 @@ class Delta_PSC232(Instrument):
 #        for ch in self.get_
 #        self.get_voltage()
 #        self.get_current()
-        self.get_active_channel()
+#        self.get_active_channel()
         for channel in self._channel_list:
             self.get('ch%i_current_measured' % channel)
             self.get('ch%i_voltage_measured' % channel)
