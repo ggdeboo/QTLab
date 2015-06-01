@@ -815,7 +815,10 @@ class Rigol_DS1000E(Instrument, WaveformReadout):
         '''Get the counter value of the oscilloscope.'''
         logging.debug(__name__ + ' : Get the counter value')
         response = self._visainstrument.ask(':COUNter:VALue?')
-        return int(float(response))
+        if response == '-inf':
+            return 0
+        else:
+            return int(float(response))
 
     def do_get_counter_enabled(self):
         '''Get whether the counter is on or off.'''
@@ -888,7 +891,9 @@ class Rigol_DS1000E(Instrument, WaveformReadout):
         # in raw mode.
         # The length of the output depends on whether one or two channels are
         # being used and whether the long memory option is enabled.
-        data = self.get_raw_waveform_data(source)
+        data = []
+        while len(data) < 611:
+            data = self.get_raw_waveform_data(source)
         return self.convert_raw_waveform_to_int_array(data)
         
     def reset(self):

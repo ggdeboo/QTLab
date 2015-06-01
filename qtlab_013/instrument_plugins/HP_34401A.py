@@ -1,4 +1,5 @@
-# HP_34401A.py driver for HP 34401A Digital Multimeter
+#  -*- coding: utf-8 -*-
+# HP_34401A.py driver for HP 34401A 6½ digit Digital Multimeter
 # Thomas Watson <tfwatson15@gmail.com>
 # Gabriele de Boo <ggdeboo@gmail.com>
 # Based on the Keithley_2001.py driver. 
@@ -37,7 +38,7 @@ def bool_to_str(val):
 
 class HP_34401A(Instrument):
     '''
-    This is the driver for the HP 34401A Multimeter
+    This is the driver for the HP 34401A 6½ digit Multimeter
     #still needs a bit of debugging
 
     Usage:
@@ -70,6 +71,7 @@ class HP_34401A(Instrument):
         Instrument.__init__(self, name, tags=['physical', 'measure'])
 
         # Add some global constants
+        self.__name__ = name
         self._address = address
         self._visainstrument = visa.instrument(self._address)
         if self._visainstrument.interface_type == 4: # serial?
@@ -115,6 +117,9 @@ class HP_34401A(Instrument):
             flags=Instrument.FLAG_GETSET,
             units='',
             type=types.BooleanType)
+        self.add_parameter('last_error_message',
+                type=types.StringType,
+                flags=Instrument.FLAG_GET)
 
         # Add functions to wrapper
         self.add_function('set_mode_volt_ac')
@@ -541,7 +546,7 @@ class HP_34401A(Instrument):
         Input:
             val (string) : Trigger source
 
-        Output:
+        Output:6½ digit
             None
         '''
         logging.debug('Set Trigger source to %s' % val)
@@ -588,7 +593,7 @@ class HP_34401A(Instrument):
             logging.error('invalid mode %s' % mode)
 
         # Get all values again because some paramaters depend on mode
-        self.get_all()
+        # self.get_all()
 
     def do_get_mode(self):
 
@@ -774,4 +779,11 @@ class HP_34401A(Instrument):
             self.set_display(True)
         if self._change_autozero:
             self.set_autozero(True)
+
+    def do_get_last_error_message(self):
+        '''
+        Read out the last error message from the instrument.
+        '''
+        message = self._visainstrument.ask('SYST:ERR?')
+        return message
 
