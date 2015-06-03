@@ -10,9 +10,6 @@ fi
 
 if [[ "$_ipython" ]]; then
     version=$("$_ipython" --version 2>/dev/null)
-    # Old ipython versions have -Version argument in stead of --version.
-    # Determine from the length of the return string if the help-text
-    # is returned instead of the version number.
     if [[ $version =~ ^0 ]]; then
         echo "ipython version below 1.0 is not supported"
     else
