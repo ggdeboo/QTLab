@@ -1,4 +1,19 @@
-# June 2013 - Gabriele de Boo
+# Superlum_BS_1060.py, instrument wrapper for QTLab 
+# Gabriele de Boo <ggdeboo@gmail.com>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 from instrument import Instrument
 from lib import visafunc
 from time import sleep
@@ -17,6 +32,16 @@ def wvl2int(wvl):
     return i
 
 class Superlum_BS_1060(Instrument):
+    '''
+    This is the instrument wrapper for the Superlum 1060 Broadsweeper
+
+    Usage:
+    Initialize with
+    <name> = instruments.create('<name>', 
+                                'Superlum_BS_1060',
+                                address='<ASRL address>',
+                                reset=<bool>)
+    '''
     def __init__(self, name, address, reset=False):
         logging.info('Initializing instrument Superlum')
         Instrument.__init__(self, name, tags=['physical'])
@@ -30,12 +55,9 @@ class Superlum_BS_1060(Instrument):
         self._visainstrument.ask('') # It always returns 'AE' after the clear command
         self._visainstrument.ask('S12')
 
+        self.set_to_remote()
+
 #        self.add_function('reset')
-        self.add_function('identify')
-        self.add_function('set_to_local')
-        self.add_function('set_to_remote')
-        self.add_function('set_power_low')
-        self.add_function('set_power_high')
 
         self.add_parameter('optical_output',
             type=types.BooleanType,
@@ -46,9 +68,9 @@ class Superlum_BS_1060(Instrument):
         self.add_parameter('power',
             type=types.StringType,
             flags=Instrument.FLAG_GET,
-	    option_list=(
-		    'low',
-		    'high'))
+            option_list=(
+            'low',
+            'high'))
         self.add_parameter('master_key_control',
             type=types.BooleanType,
             flags=Instrument.FLAG_GET)
@@ -58,33 +80,67 @@ class Superlum_BS_1060(Instrument):
         self.add_parameter('operating_mode',
             type=types.StringType,
             flags=Instrument.FLAG_GETSET,
-	    option_list=(
-		    'manual',
-		    'external',
-		    'automatic',
-		    'modulation'))
+            option_list=(
+            'manual',
+            'external',
+            'automatic',
+            'modulation'))
         self.add_parameter('manual_mode_wavelength',
             type=types.FloatType,
-            flags=Instrument.FLAG_GETSET, minval=1024.0, maxval=1094.0, units='nm')
+            flags=Instrument.FLAG_GETSET, 
+            minval=1024.0, 
+            maxval=1094.0, 
+            units='nm',
+            format='%.02f',
+            )
         self.add_parameter('sweep_mode_start',
             type=types.FloatType,
-            flags=Instrument.FLAG_GETSET, minval=1024.0, maxval=1094.0, units='nm')
+            flags=Instrument.FLAG_GETSET, 
+            minval=1024.0, 
+            maxval=1094.0, 
+            units='nm',
+            format='%.02f',
+            )
         self.add_parameter('sweep_mode_end',
             type=types.FloatType,
-            flags=Instrument.FLAG_GETSET, minval=1024.0, maxval=1094.0, units='nm')
+            flags=Instrument.FLAG_GETSET, 
+            minval=1024.0, 
+            maxval=1094.0, 
+            units='nm',
+            format='%.02f',
+            )
         self.add_parameter('sweep_speed',
             type=types.IntType,
-            flags=Instrument.FLAG_GETSET, minval=2, maxval=10000, units='nm/s')
+            flags=Instrument.FLAG_GETSET, 
+            minval=2, 
+            maxval=10000, 
+            units='nm/s')
         self.add_parameter('modulation_mode_wavelength1',
             type=types.FloatType,
-            flags=Instrument.FLAG_GETSET, minval=1024.0, maxval=1094.0, units='nm')
+            flags=Instrument.FLAG_GETSET, 
+            minval=1024.0, 
+            maxval=1094.0, 
+            units='nm')
         self.add_parameter('modulation_mode_wavelength2',
             type=types.FloatType,
-            flags=Instrument.FLAG_GETSET, minval=1024.0, maxval=1094.0, units='nm')
+            flags=Instrument.FLAG_GETSET, 
+            minval=1024.0, 
+            maxval=1094.0, 
+            units='nm')
         self.add_parameter('modulation_mode_frequency',
             type=types.FloatType,
-            flags=Instrument.FLAG_GETSET, units='Hz',
-	    option_list=freqs)
+            flags=Instrument.FLAG_GETSET, 
+            units='Hz',
+            option_list=freqs)
+
+        self.add_function('identify')
+        self.add_function('set_to_local')
+        self.add_function('set_to_remote')
+        self.add_function('set_power_low')
+        self.add_function('set_power_high')
+
+        if reset == True:
+            pass
 
         self.get_all()
 
@@ -133,8 +189,10 @@ class Superlum_BS_1060(Instrument):
                 return True
                 logging.info('The optical output of %s is on' % self._name)
         else:
-            logging.warning('%s responded with an unknown string: %s' % ( self._name, reply))
-            raise Warning('%s responded with an unknown string: %s' % ( self._name, reply))
+            logging.warning('%s responded with an unknown string: %s' 
+                                % ( self._name, reply))
+            raise Warning('%s responded with an unknown string: %s' 
+                                % ( self._name, reply))
 
     def do_set_optical_output(self, output):
         '''
@@ -146,22 +204,23 @@ class Superlum_BS_1060(Instrument):
         Output:
             None
         '''
-        logging.info('Setting the optical output of %s to %s.' % (self._name, output))
+        logging.info('Setting the optical output of %s to %s.' 
+                                % (self._name, output))
         if output: 
             if not self.do_get_optical_output():
                 reply = self._visainstrument.ask('S21')
                 sleep(0.5)
                 self.get_booster_emission()
             else:
-#                print 'Optical output is already enabled.'
-                logging.info('The optical output of %s already was on.' %self._name)
+                logging.info('The optical output of %s already was on.' 
+                                % self._name)
         else:
             if self.do_get_optical_output():
                 reply = self._visainstrument.ask('S21')
                 self.get_booster_emission()
             else:
-#                print 'Optical output is already disabled.'
-                logging.info('The optical output of %s already was off.' %self._name)
+                logging.info('The optical output of %s already was off.' 
+                                % self._name)
 
     def do_get_booster_emission(self):
         '''
@@ -173,7 +232,8 @@ class Superlum_BS_1060(Instrument):
             True if booster emission is on
             False if booster emission is off
         '''
-        logging.info('Getting the status of the booster emission of %s.' % self._name)
+        logging.info('%s : Getting the status of the booster emission.' 
+                                % self._name)
         reply = self.reply_error_check(self._visainstrument.ask('S20'))
         if reply.startswith('A2'):
             data1 = int(reply[2:5])
@@ -197,8 +257,10 @@ class Superlum_BS_1060(Instrument):
             else:
                 return 0
         else:
-            logging.warning('get_power: %s responded with %s.' % (self._name, reply))
-            raise Warning('%s get_power failed because the response was: %s.' % (self._name, reply))
+            logging.warning('get_power: %s responded with %s.' 
+                                    % (self._name, reply))
+            raise Warning('%s get_power failed because the response was: %s.' 
+                                    % (self._name, reply))
     
     def set_power_low(self):
         if self.get_optical_output:
@@ -207,8 +269,10 @@ class Superlum_BS_1060(Instrument):
             else:
                 reply = self.reply_error_check(self._visainstrument.ask('S41'))
         else:
-            logging.warning('set_power_low failed for %s because the optical output is active.' % self._name)
-            raise Warning('The power of %s can not be changed because the optical output is active.' % self._name)
+            logging.warning('set_power_low failed for %s because the' + 
+                                    'optical output is active.' % self._name)
+            raise Warning('The power of %s can not be changed because the' + 
+                                    ' optical output is active.' % self._name)
 
     def set_power_high(self):
         if self.get_optical_output:
@@ -217,8 +281,10 @@ class Superlum_BS_1060(Instrument):
             else:
                 reply = self._visainstrument.ask('S41')
         else:
-            logging.warning('set_power_high failed for %s because the optical output is active.' % self._name)
-            raise Warning('The power of %s can not be changed because the optical output is active.' % self._name)
+            logging.warning('set_power_high failed for %s because the' + 
+                                    ' optical output is active.' % self._name)
+            raise Warning('The power of %s can not be changed because the' + 
+                                    ' optical output is active.' % self._name)
 
     def do_get_master_key_control(self):
         '''
@@ -239,13 +305,10 @@ class Superlum_BS_1060(Instrument):
             else:
                 return True
         else:
-            logging.warning('get_master_key_control: %s responded with %s.' % (self._name, reply))
-            raise Warning('%s get_master_key_control failed because the response was: %s.' % (self._name, reply))
-
-#    def _send_and_read(self, message):
-#        logging.debug('Sending %r', message)
-#        reply = self._visainstrument.ask(message)
-#        return reply
+            logging.warning('get_master_key_control: %s responded with %s.' 
+                                    % (self._name, reply))
+            raise Warning('%s get_master_key_control failed because the' + 
+                                ' response was: %s.' % (self._name, reply))
 
     def set_to_local(self):
         logging.debug('Setting to local.')
@@ -256,8 +319,13 @@ class Superlum_BS_1060(Instrument):
             print 'Superlum command failed with error: ' + reply
 
     def do_get_full_tuning_range(self):
-        # The Full Tuning range consists of one list, with two lists inside
-        # [[end wavelength low power, start wavelength low power, end wavelength high power, start wavelength high power]]
+        '''
+        The Full Tuning range consists of one list, with two lists inside
+        [[end wavelength low power, 
+            start wavelength low power, 
+            end wavelength high power, 
+            start wavelength high power]]
+        '''
         logging.debug('Getting Full Tuning Range.')
         reply = self.reply_error_check(self._visainstrument.ask('S52'))
         if reply.startswith('A52'):
@@ -286,8 +354,10 @@ class Superlum_BS_1060(Instrument):
             elif reply[2] == '4':
                 return 'modulation'
         else:
-            logging.warning('get_operating_mode: %s responded with %s.' % (self._name, reply))
-            raise Warning('%s get_operating_mode failed because the response was: %s.' % (self._name, reply))
+            logging.warning('get_operating_mode: %s responded with %s.' 
+                                    % (self._name, reply))
+            raise Warning('%s get_operating_mode failed because the' + 
+                                ' response was: %s.' % (self._name, reply))
 
     def do_set_operating_mode(self, mode):
         if mode == 'manual':
@@ -299,23 +369,29 @@ class Superlum_BS_1060(Instrument):
         elif mode == 'modulation':
             self._visainstrument.ask('S64')
         else:
-            print 'Mode selection value is wrong, choose either manual, automatic, external or modulation.'
+            print('Mode selection value is wrong, choose either manual,'+
+                    ' automatic, external or modulation.')
 
     def set_to_remote(self):
+        '''Set the instrument to remote control'''
         logging.debug('Setting to remote.')
         reply = self._visainstrument.ask('S12')
         if reply == 'A12':
-            print 'Superlum set to remote mode.'
+            logging.info('Superlum set to remote mode.')
         else:
-            print 'Superlum command failed with error: ' + reply
+            logging.warning(__name__ + 
+                            ' set_to_remote failed with error: %s' +
+                            reply)
 
     def do_get_manual_mode_wavelength(self):
         reply = self.reply_error_check(self._visainstrument.ask('S71'))
         if reply.startswith('A71'):
             return int2wvl(reply[3:7])
         else:
-            logging.warning('get_manual_mode_Wavelength: %s responded with %s.' % (self._name, reply))
-            raise Warning('%s get_manual_mode_Wavelength failed because the response was: %s.' % (self._name, reply))
+            logging.warning('get_manual_mode_Wavelength: %s responded' + 
+                                        ' with %s.' % (self._name, reply))
+            raise Warning('%s get_manual_mode_Wavelength failed because' + 
+                            ' the response was: %s.' % (self._name, reply))
 
     def do_set_manual_mode_wavelength(self, wvl):
         '''
@@ -327,14 +403,15 @@ class Superlum_BS_1060(Instrument):
         '''
         logging.info('Setting the wavelength of %s to %.2f.' % (self._name, wvl))
         laser_string = '%0*d' % (4, wvl2int(wvl))
-        reply = self.reply_error_check(self._visainstrument.ask('S81'+laser_string))
+        reply = self.reply_error_check(
+                                self._visainstrument.ask('S81'+laser_string))
         if reply == ('A81'+laser_string):
-#            print 'Wavelength changed to %4.2f nm' % wvl
             logging.debug('Wavelength succesfully set.')
         else:
-#            print 'Error: ' + reply
-            logging.warning('set_manual_mode_wavelength: Failed with reply from laser: %s' % reply)
-            raise Warning('%s responded with an incorrect string: %s' % ( self._name, reply))
+            logging.warning('set_manual_mode_wavelength: Failed with reply' + 
+                                        ' from laser: %s' % reply)
+            raise Warning('%s responded with an incorrect string: %s' 
+                                        % ( self._name, reply))
 
     def do_get_sweep_mode_start(self):
         logging.debug('Getting Sweep Mode Start.')
@@ -342,8 +419,10 @@ class Superlum_BS_1060(Instrument):
         if reply.startswith('A72'):
             return int2wvl(reply[3:7])
         else:
-            logging.warning('get_sweep_mode_start: %s responded with %s.' % (self._name, reply))
-            raise Warning('%s get_sweep_mode_start failed because the response was: %s.' % (self._name, reply))
+            logging.warning('get_sweep_mode_start: %s responded with %s.' 
+                                        % (self._name, reply))
+            raise Warning('%s get_sweep_mode_start failed because the' + 
+                                ' response was: %s.' % (self._name, reply))
 
     def do_set_sweep_mode_start(self, wvl):
         logging.debug('Setting sweep mode start.')
@@ -360,8 +439,10 @@ class Superlum_BS_1060(Instrument):
         if reply.startswith('A73'):
             return int2wvl(reply[3:7])
         else:
-            logging.warning('get_Sweep_Mode_End: %s responded with %s.' % (self._name, reply))
-            raise Warning('%s get_Sweep_Mode_End failed because the response was: %s.' % (self._name, reply))
+            logging.warning('get_Sweep_Mode_End: %s responded with %s.' 
+                                    % (self._name, reply))
+            raise Warning('%s get_Sweep_Mode_End failed because the'+
+                                ' response was: %s.' % (self._name, reply))
 
     def do_set_sweep_mode_end(self, wvl):
         logging.debug('Setting sweep mode end.')
@@ -388,8 +469,10 @@ class Superlum_BS_1060(Instrument):
             else:
                 return (reply2[3:5]) # Slow sweep speed
         else:
-            logging.warning('get_sweep_speed: %s responded with %s.' % (self._name, reply))
-            raise Warning('%s get_sweep_sweep failed because the response was: %s.' % (self._name, reply))
+            logging.warning('get_sweep_speed: %s responded with %s.' 
+                                                % (self._name, reply))
+            raise Warning('%s get_sweep_sweep failed because the response' + 
+                                    ' was: %s.' % (self._name, reply))
 
     def do_set_sweep_speed(self, speed):
         if speed < 10:
@@ -476,22 +559,22 @@ class Superlum_BS_1060(Instrument):
               Any query except the control change query is denied.
         <AE>: General error.
         
-	If any of these errors occur the program should throw an exception
+        If any of these errors occur the program should throw an exception
         because the errors are avoidable.
         Input:
             Reply from the instrument
         Output:
             Reply from the instrument
         '''
-	if reply == 'AL':
+        if reply == 'AL':
             logging.warning('%s responded with AL.' % self._name)
             raise Warning(
-	        'The function could not be executed becase %s is under local control.'
+            'The function could not be executed becase %s is under local control.'
                 % self._name)
-	elif reply == 'AE':
+        elif reply == 'AE':
             logging.warning('%s responded with AE.' % self._name)
             raise Warning(
                 'The function could not be executed becase %s responded with a general error.' 
-		% self._name)
+            % self._name)
         else:
             return reply
