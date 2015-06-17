@@ -1,5 +1,6 @@
 # NI_DAQ.py, National Instruments Data AcQuisition instrument driver
 # Reinier Heeres <reinier@heeres.eu>, 2009
+# Gabriele de Boo <ggdeboo@gmail.com>, 2015
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -30,11 +31,33 @@ def _get_channel(devchan):
     return parts[1]
 
 class NI_DAQ(Instrument):
+    '''
+    This is the QTLab wrapper for National Instruments data acquisition cards
+    '''
+    def __init__(self, name, id, samples=100, freq=10000, reset=False):
+        '''
+        Initializes the daq card
 
-    def __init__(self, name, id, samples=100, freq=10000.0, reset=False):
+        Input:
+            name(string)        : name of the instrument
+            id(string)          : device id as set by the NI configuration
+            samples(integer)    : the number of samples to take per acquisition
+            freq(integer)       : the sampling rate
+        
+        Output:
+            None
+        '''
         Instrument.__init__(self, name, tags=['physical'])
 
         self._id = id
+
+        self.add_parameter('chan_config',
+            flags=Instrument.FLAG_SET|Instrument.FLAG_SOFTGET,
+            type=types.StringType,
+            option_list=('Default', 'RSE', 'NRSE', 'Diff', 'PseudoDiff'))
+
+        self.set_chan_config('Diff')
+
         for ch_in in self._get_input_channels():
             ch_in = _get_channel(ch_in)
             self.add_parameter(ch_in,
@@ -42,6 +65,7 @@ class NI_DAQ(Instrument):
 #                type=types.FloatType,    #Jan en Max changed 'type=types.FloatType' to 'type=types.ListType, if charge sensing is needed'
                 type=np.ndarray,
                 units='mV',
+                format='%.02f',
                 tags=['measure'],
                 get_func=self.do_get_input,
                 channel=ch_in)
@@ -53,6 +77,7 @@ class NI_DAQ(Instrument):
                 type=types.FloatType,
                 minval=-10000 , maxval = 10000,
                 units='mV',
+                format='%.02f',
                 tags=['sweep'],
                 maxstep=100, stepdelay=50,
                 set_func=self.do_set_output,
@@ -74,10 +99,6 @@ class NI_DAQ(Instrument):
                 set_func=self.do_set_counter_src,
                 channel=ch_ctr)
 
-        self.add_parameter('chan_config',
-            flags=Instrument.FLAG_SET|Instrument.FLAG_SOFTGET,
-            type=types.StringType,
-            option_list=('Default', 'RSE', 'NRSE', 'Diff', 'PseudoDiff'))
 
         self.add_parameter('count_time',
             flags=Instrument.FLAG_SET|Instrument.FLAG_SOFTGET,
@@ -96,7 +117,6 @@ class NI_DAQ(Instrument):
 
         self.add_function('reset')
 
-        self.set_chan_config('Diff')
         self.set_count_time(0.1)
         self.set_samples(samples)#Added by Jan
         self.set_freq(freq)#Added by Jan
@@ -130,7 +150,11 @@ class NI_DAQ(Instrument):
         nidaq.reset_device(self._id)
 
     def _get_input_channels(self):
-        return nidaq.get_physical_input_channels(self._id)
+        physical_input_channels = nidaq.get_physical_input_channels(self._id)
+        if self.get_chan_config() == 'DIFF':
+            return physical_input_channels[:len(physical_input_channels)/2]
+        else:
+            return physical_input_channels
 
     def _get_output_channels(self):
         return nidaq.get_physical_output_channels(self._id)
