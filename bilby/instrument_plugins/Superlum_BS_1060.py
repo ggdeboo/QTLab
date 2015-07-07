@@ -204,7 +204,7 @@ class Superlum_BS_1060(Instrument):
         Output:
             None
         '''
-        logging.info('Setting the optical output of %s to %s.' 
+        logging.debug('Setting the optical output of %s to %s.' 
                                 % (self._name, output))
         if output: 
             if not self.do_get_optical_output():
@@ -401,7 +401,7 @@ class Superlum_BS_1060(Instrument):
         Output:
             None
         '''
-        logging.info('Setting the wavelength of %s to %.2f.' % (self._name, wvl))
+        logging.debug('Setting the wavelength of %s to %.2f.' % (self._name, wvl))
         laser_string = '%0*d' % (4, wvl2int(wvl))
         reply = self.reply_error_check(
                                 self._visainstrument.ask('S81'+laser_string))
