@@ -18,6 +18,7 @@
 
 from instrument import Instrument
 import types
+import logging
 from ctypes import *
 
 wlmData = windll.wlmData
@@ -30,29 +31,47 @@ GetLw = wlmData.GetLinewidth
 GetLw.restype = c_double
 GetPwr = wlmData.GetPowerNum
 GetPwr.restype = c_double
+GetExposure = wlmData.GetExposure
+GetExposure.restype = c_ushort
+ConvertUnit = wlmData.ConvertUnit
+ConvertUnit.restype = c_double
+
+cReturnWavelengthVac    = c_ushort(0)
+cReturnWavelengthAir    = c_ushort(1)
+cReturnFrequency        = c_ushort(2)
+cReturnWavenumber       = c_ushort(3)
+cReturnPhotonEnergy     = c_ushort(4)
 
 class HighFinesse(Instrument):
     '''High Finesse Wavelength meter'''
 
     def __init__(self, name, reset=False):
-        Instrument.__init__(self,name)
+        Instrument.__init__(self, name, tags=['physical'])
 
         self.add_parameter('wavelength',
                 type=types.FloatType,
                 flags=Instrument.FLAG_GET,
                 units='nm')
-	self.add_parameter('frequency',
-	        type=types.FloatType,
-		flags=Instrument.FLAG_GET,
-		units='THz')
-	self.add_parameter('linewidth',
-		type=types.FloatType,
-		flags=Instrument.FLAG_GET,
-		units='THz')
+        self.add_parameter('frequency',
+                type=types.FloatType,
+                flags=Instrument.FLAG_GET,
+                units='THz')
+        self.add_parameter('energy',
+                type=types.FloatType,
+                flags=Instrument.FLAG_GET,
+                units='eV')
+        self.add_parameter('linewidth',
+                type=types.FloatType,
+                flags=Instrument.FLAG_GET,
+                units='THz')
         self.add_parameter('power',
                 type=types.FloatType,
                 flags=Instrument.FLAG_GET,
                 units='microW')
+        self.add_parameter('exposure',
+                type=types.IntType,
+                flags=Instrument.FLAG_GET,
+                units='ms')
 
         if reset:
             self.reset()
@@ -67,20 +86,41 @@ class HighFinesse(Instrument):
     def get_all(self):
         print __name__ + ' : reading all settings from instrument'
         self.get_wavelength()
-	self.get_frequency()
+        self.get_frequency()
+#        self.get_energy()
+        self.get_power()
 
 #### communication with machine
 
     def do_get_wavelength(self):
-	Wavelength = GetWvl(c_double(0))
+        '''Get the measured wavelength in nm'''
+        Wavelength = GetWvl(c_double(0))
         return Wavelength
 
     def do_get_power(self):
+        '''Get the measured optical power'''
         return GetPwr(c_long(1), c_double(0))
 
     def do_get_frequency(self):
-	return GetFrq(c_double(0))
+        '''Get the measured frequency in THz'''
+        return GetFrq(c_double(0))
+
+    def do_get_energy(self):
+        '''Get the measured energy in eV'''
+        frequency = GetFrq(c_double(0))
+        energy = ConvertUnit(c_double(frequency),
+                             cReturnFrequency,
+                             cReturnPhotonEnergy)
+        return energy
 
     def do_get_linewidth(self):
-	return GetLw(c_char_p(cReturnFrequency),c_double(0))
+        '''Get the measured linewidth'''
+        linewidth = GetLw(cReturnFrequency,c_double(0))
+        if linewidth == -6:
+            logging.warning('Linewidth measurement is not available.')
+        else:
+            return linewidth
 
+    def do_get_exposure(self):
+        '''Get the exposure in ms'''
+        return GetExposure(c_ushort(0))
