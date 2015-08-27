@@ -76,15 +76,15 @@ class Toptica_DL110(Instrument):
                         )
         # scan block
         self.add_parameter('scan_enabled',
-                        flags=Instrument.FLAG_GET,
+                        flags=Instrument.FLAG_GETSET,
                         type=types.BooleanType,
                         )
         self.add_parameter('scan_amplitude',
-                        flags=Instrument.FLAG_GET,
+                        flags=Instrument.FLAG_GETSET,
                         type=types.FloatType,
                         )
         self.add_parameter('scan_frequency',
-                        flags=Instrument.FLAG_GET,
+                        flags=Instrument.FLAG_GETSET,
                         type=types.FloatType,
                         )
         self.add_parameter('scan_output',
@@ -92,8 +92,12 @@ class Toptica_DL110(Instrument):
                         type=types.StringType,
                         )
         self.add_parameter('scan_signal_type',
-                        flags=Instrument.FLAG_GET,
+                        flags=Instrument.FLAG_GETSET,
                         type=types.StringType,
+                        option_list=('triangle',
+                                    'square',
+                                    'sine',
+                                    'sawtooth')
                         )
 
         self.add_function ('get_all')
@@ -189,17 +193,36 @@ class Toptica_DL110(Instrument):
         else:
             logging.warning('Unexpected response to scan:enable? : %s' % response)
 
+    def do_set_scan_enabled(self, enabled):
+        '''Set the scan enabled to True or False'''
+        if enabled:
+            response = self.query('scan:enable=true')
+        else:
+            response = self.query('scan:enable=false')
+
     def do_get_scan_amplitude(self):
         '''Get the scan amplitude'''
         logging.debug(__name__ + ' Getting the scan amplitude')
         response = self.query('scan:amplitude?').lstrip('scan:amplitude=')
         return float(response)
 
+    def do_set_scan_amplitude(self, amplitude):
+        '''Set the scan amplitude'''
+        logging.debug(__name__ + ' Setting the scan amplitude to %.3f V' %
+                        amplitude)
+        response = self.query('scan:amplitude=%.3f' % amplitude)
+
     def do_get_scan_frequency(self):
         '''Get the scan frequency'''
         logging.debug(__name__ + ' Getting the scan frequency')
         response = self.query('scan:frequency?').lstrip('scan:frequency=')
         return float(response)
+
+    def do_set_scan_frequency(self, frequency):
+        '''Set the scan frequency'''
+        logging.debug(__name__ + ' Setting the scan frequency to %.1f Hz'
+                        % frequency)
+        response = self.query('scan:frequency=%.3f' % frequency)
 
     def do_get_scan_output(self):
         '''Get the scan output destination'''
@@ -212,6 +235,12 @@ class Toptica_DL110(Instrument):
         logging.debug(__name__ + ' Getting the scan signal type')
         response = self.query('scan:signal type?').lstrip('scan:signal type')
         return response[1:]
+
+    def do_set_scan_signal_type(self, signal_type):
+        '''Set the scan signal type'''
+        logging.debug(__name__ + ' Setting the scan signal type to %s' %
+                                signal_type)
+        response = self.query('scan:signal type=%s' % signal_type)
 
     def query(self, command):
         '''

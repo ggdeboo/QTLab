@@ -33,6 +33,12 @@ GetPwr = wlmData.GetPowerNum
 GetPwr.restype = c_double
 GetExposure = wlmData.GetExposure
 GetExposure.restype = c_ushort
+GetTemperature = wlmData.GetTemperature
+GetTemperature.restype = c_double
+GetPressure = wlmData.GetPressure
+GetPressure.restype = c_double
+GetInterval = wlmData.GetInterval
+GetInterval.restype = c_long
 ConvertUnit = wlmData.ConvertUnit
 ConvertUnit.restype = c_double
 
@@ -72,6 +78,18 @@ class HighFinesse(Instrument):
                 type=types.IntType,
                 flags=Instrument.FLAG_GET,
                 units='ms')
+        self.add_parameter('temperature',
+                type=types.FloatType,
+                flags=Instrument.FLAG_GET,
+                units='C')
+        self.add_parameter('pressure',
+                type=types.FloatType,
+                flags=Instrument.FLAG_GET,
+                units='mbar')
+        self.add_parameter('interval',
+                type=types.IntType,
+                flags=Instrument.FLAG_GET,
+                units='ms')
 
         if reset:
             self.reset()
@@ -87,8 +105,10 @@ class HighFinesse(Instrument):
         print __name__ + ' : reading all settings from instrument'
         self.get_wavelength()
         self.get_frequency()
-#        self.get_energy()
+        self.get_energy()
         self.get_power()
+        self.get_temperature()
+        self.get_pressure()
 
 #### communication with machine
 
@@ -124,3 +144,15 @@ class HighFinesse(Instrument):
     def do_get_exposure(self):
         '''Get the exposure in ms'''
         return GetExposure(c_ushort(0))
+
+    def do_get_temperature(self):
+        '''Get the temperature in C'''
+        return GetTemperature(c_double(0))
+
+    def do_get_pressure(self):
+        '''Get the pressure in mbar'''
+        return GetPressure(c_double(0))
+
+    def do_get_interval(self):
+        '''Get the measurement interfal in ms'''
+        return GetInterval(c_long(0))
