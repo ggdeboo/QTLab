@@ -99,12 +99,32 @@ class HP_8131A(Instrument):
             channels=(1, 2),
             flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET,
             channel_prefix='ch%d_')
+        self.add_parameter('inverted_output_status', 
+            type=types.StringType, 
+            channels=(1, 2),
+            flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET,
+            channel_prefix='ch%d_')        
+        # Trigger parameters
+        self.add_parameter('trigger_slope',
+            type=types.StringType,
+            flags=Instrument.FLAG_GETSET,
+            option_list=('POS','NEG'),
+            )
+        self.add_parameter('count', 
+            type=types.IntType, tags=['sweep'],
+            flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET, 
+            minval=0, maxval=9999)
+        self.add_parameter('trigger_operating_mode',
+            type=types.StringType,
+            flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET, 
+            option_list = ('AUTO',
+                            'TRIG',
+                            'BURS',
+                            'EWID',
+                            'GATE'))
 
         self.add_function('reset')
         self.add_function('get_all')
-        self.add_function('set_mode_continuous')
-        self.add_function('set_mode_trigger')
-        self.add_function('set_mode_burst')
         self.add_function('send_trigger')
         self.add_function('off')
         self.add_function('on')
@@ -144,6 +164,9 @@ class HP_8131A(Instrument):
         logging.info(__name__ + ' : reading all settings from instrument')
 
         self.get('period')
+        self.get_trigger_slope()
+        self.get_trigger_operating_mode()
+        self.get_count()
         for i in [1, 2]: #range requires (1,3) to iterate over 1 and 2
 ##            self.get('ch%d_dutycycle' % i)
             try:
@@ -152,6 +175,7 @@ class HP_8131A(Instrument):
                 self.get('ch%d_low' % i)
                 self.get('ch%d_high' % i)
                 self.get('ch%d_status' % i)
+                self.get('ch%d_inverted_output_status' % i)
             except:
                 print('There seems to be only one channel fitted on this ' + 
                         'pulse generator...')
@@ -389,25 +413,142 @@ class HP_8131A(Instrument):
         else:
             logging.error('Tried to set status to "' + str(val) + 
                             '" (value must be "on"/"off")')
-
-    def set_mode_continuous(self):
+            
+    def do_get_inverted_output_status(self, channel=1):
         '''
-        Sets the instrument in 'auto' mode
+        Reads the status of the inverted output for the specified channel
+
+        Input:
+            channel (int) : 1 or 2, the number of the designated channel 
+                            (default 1)
+
+        Output:
+            status (string) : 'on' or 'off'
+        '''
+        logging.debug(__name__ + 
+                ' : getting inverted output status for channel %d' % channel)
+        val = self._visainstrument.ask('OUTP' + str(channel) + ':PULS:CST?')
+        if val == 'ON':
+            return 'on'
+        elif val == 'OFF':
+            return 'off'
+        else:
+            logging.error('Getting inverted output status returned with: %s'
+                            % val)
+
+    def do_set_inverted_output_status(self, val, channel=1):
+        '''
+        Sets the inverted output status of the specified channel
+
+        Input:
+            val (string)  : 'on' or 'off'
+            channel (int) : 1 or 2, the number of the designated channel 
+                            (default 1)
+
+        Output:
+            None
+        '''
+        logging.debug(__name__ + ' : setting status for channel %d to %s' 
+                        % (channel, val))
+        if ((val.upper()=='ON') | (val.upper()=='OFF')):
+            self._visainstrument.write('OUTP' + str(channel) + 
+                    ":PULSE:CST " + val)
+        else:
+            logging.error('Tried to set status to "' + str(val) + 
+                            '" (value must be "on"/"off")')
+
+    def do_set_trigger_operating_mode(self,mode):
+        '''
+        Sets the instrument trigger operating mode
+
+        Input:
+            mode(string):'AUTO', 'TRIG', 'GATE', 'BURS' or 'EWID'
+
+        Output:
+            None
+        '''
+        self._visainstrument.write('INP:TRIG:MODE '+str(mode))
+        
+    def do_get_trigger_operating_mode(self):
+        '''
+        Gets the instrument trigger operating mode
 
         Input:
             None
 
         Output:
+            mode(string):'AUTO', 'TRIG', 'GATE', 'BURS' or 'EWID'
+        '''
+        response = self._visainstrument.ask('INP:TRIG:MODE?')
+        if response == 'AUTO':
+            return('AUTO')
+        elif response == 'TRIGGER':
+            return('TRIG')
+        elif response == 'GATE':
+            return('GATE')
+        elif response == 'BURST':
+            return('BURS')
+        elif response == 'EWIDTH':
+            return('EWID')
+        else:
+            logging.WARNING('Trigger operating mode response not recognized: %s'
+                % response)
+        
+    def do_set_trigger_slope(self,slope):
+        '''
+        Sets the trigger signal to postive or negtive
+        
+        Input:
+            slope(string):'POS' or 'NEG'
+        
+        Output:
             None
         '''
-        logging.debug(__name__ + ' : setting instrument to continuous mode')
-        self._visainstrument.write('INP:TRIG:MODE AUTO')
+        self._visainstrument.write('INP:TRIG:SLOP '+slope)
+        
+    def do_get_trigger_slope(self):
+        '''
+        Get the trigger signal slope
+        
+        Input:
+            None
+        
+        Output:
+            slope(string):'POS' or 'NEG'
+        '''
+        response = self._visainstrument.ask('INP:TRIG:SLOP?')
+        if response == 'POSITIVE':
+            return('POS')
+        elif response == 'NEGATIVE':
+            return('NEG')
+        else:
+            logging.WARNING('Trigger slope response not recognized: %s' % response)
 
-    def set_mode_trigger(self):
-        self._visainstrument.write('INP:TRIG:MODE TRIG')
-
-    def set_mode_burst(self):
-        self._visainstrument.write('INP:TRIG:MODE BURS')
+    def do_get_count(self):
+        '''
+        Gets the number of pulses emitted for each trigger input in burst mode
+        
+        Input:
+            None
+        
+        Output:
+            count(int): between 0 to 9999
+        '''
+        logging.debug(__name__ + ' : get count')
+        return int(self._visainstrument.ask('PULS:COUN?'))
+            
+    def do_set_count(self,count):
+        '''
+        Sets the number of pulses emitted for each trigger input in burst mode
+        
+        Input:
+            count(int): between 0 to 9999
+        
+        Output:
+            None
+        '''
+        self._visainstrument.write('PULS:COUN '+str(count))
+        
 
     # shortcuts
     def off(self, channel=0):
