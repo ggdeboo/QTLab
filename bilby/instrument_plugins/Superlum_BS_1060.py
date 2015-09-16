@@ -57,6 +57,16 @@ class Superlum_BS_1060(Instrument):
 
         self.set_to_remote()
 
+        idt = self._visainstrument.ask('S0')
+        if idt.startswith('A0'):
+            self.device_type = int(idt[2])
+            self.channels = int(idt[3])
+            self.firmware = int(idt[4])
+            logging.info('Superlum connected with firmware version %i' %
+                        self.firmware)
+        else:
+            raise StandardError('Identification response not correct: %s'
+                                % idt)
 #        self.add_function('reset')
 
         self.add_parameter('optical_output',
@@ -182,13 +192,38 @@ class Superlum_BS_1060(Instrument):
         if reply.startswith('A2'):
             data1 = int(reply[2:5])
             data2 = int(reply[6:7])
-            if ((data1 < 97) or (data1 == 97) or (data1 ==113)):
-                return False
-                logging.info('The optical output of %s is off' % self._name)
+            if self.firmware == 6:
+                if 0 > data1 > 97:
+                    # Master key in position O or remote interlock closed
+                    logging.info('Master key is in position O or remote ' +
+                                 'interlock is closed')
+                    return False
+                elif (data1 == 97) or (data1 == 101):
+                    # Low power mode and output disabled
+                    return False
+                elif (data1 == 99) or (data1 == 103):
+                    # Low power mode and output enabled
+                    return True
+                elif (data1 == 113) or (data1 == 117):
+                    # High power mode and output disabled
+                    return False
+                elif (data1 == 115) or (data1 == 119):
+                    # High power mode and optical output enabled
+                    return True
             else:
-                return True
-                logging.info('The optical output of %s is on' % self._name)
+                print ('ACP0')
+                if ((data1 < 97) or (data1 == 97) or (data1 ==113)):
+                    logging.info('The optical output of %s is off' % self._name)
+                    print ('data1 is %d' %data1)
+                    print ('ACP1')
+                    return False
+                else:
+                    logging.info('The optical output of %s is on' % self._name)
+                    print ('data1 is %d' %data1)
+                    print ('ACP2')
+                    return True
         else:
+            print ('ACP3')
             logging.warning('%s responded with an unknown string: %s' 
                                 % ( self._name, reply))
             raise Warning('%s responded with an unknown string: %s' 
@@ -384,6 +419,7 @@ class Superlum_BS_1060(Instrument):
                             reply)
 
     def do_get_manual_mode_wavelength(self):
+        '''Get the wavelength for the manual mode'''
         reply = self.reply_error_check(self._visainstrument.ask('S71'))
         if reply.startswith('A71'):
             return int2wvl(reply[3:7])
@@ -489,7 +525,8 @@ class Superlum_BS_1060(Instrument):
                 print 'Error: ' + reply
 
     def do_get_modulation_mode_wavelength1(self):
-        logging.debug('Getting Modulation Mode Wavelength1.')
+        '''Get the first wavelength for the two wavelength modulation mode'''
+        logging.debug(self.__name__ + 'Getting Modulation Mode Wavelength1.')
         reply = self.reply_error_check(self._visainstrument.ask('S75'))
         if reply.startswith('A75'):
             return int2wvl(reply[3:7])
@@ -498,16 +535,21 @@ class Superlum_BS_1060(Instrument):
             raise Warning('%s get_modulation_mode_wavelength1 failed because the response was: %s.' % (self._name, reply))
 
     def do_set_modulation_mode_wavelength1(self, wvl):
-        logging.debug('Setting modulation mode wavelength1.')
+        '''Set the first wavelength for the two wavelength modulation mode'''
+        logging.debug(self.__name__ + 'Setting modulation mode wavelength1.')
         laser_string = '%0*d' % (4, wvl2int(wvl))
-        reply = self.reply_error_check(self._visainstrument.ask('S85'+laser_string))
+        reply = self.reply_error_check(self._visainstrument.ask(
+                                                        'S85'+laser_string))
         if reply == ('A85'+laser_string):
             print 'Modulation mode wavelength 1 set to ' + str(wvl)
         else:
-            logging.warning('set_Modulation_Mode_Wavelength1: %s responded with %s.' % (self._name, reply))
-            raise Warning('%s set_Modulation_Mode_Wavelength1 failed because the response was: %s.' % (self._name, reply))
+            logging.warning('set_Modulation_Mode_Wavelength1: %s responded ' + 
+                            'with %s.' % (self._name, reply))
+            raise Warning('%s set_Modulation_Mode_Wavelength1 failed because'+
+                          ' the response was: %s.' % (self._name, reply))
 
     def do_get_modulation_mode_wavelength2(self):
+        '''Get the second wavelength for the two wavelength modulation mode'''
         logging.debug('Getting modulation mode wavelength2.')
         reply = self.reply_error_check(self._visainstrument.ask('S76'))
         if reply.startswith('A76'):
@@ -517,6 +559,7 @@ class Superlum_BS_1060(Instrument):
             raise Warning('%s get_modulation_mode_wavelength2 failed because the response was: %s.' % (self._name, reply))
 
     def do_set_modulation_mode_wavelength2(self, wvl):
+        '''Set the second wavelength for the two wavelength modulation mode'''
         logging.debug('Setting modulation mode wavelength2.')
         laser_string = '%0*d' % (4, wvl2int(wvl))
         reply = self.reply_error_check(self._visainstrument.ask('S86'+laser_string))
@@ -527,6 +570,7 @@ class Superlum_BS_1060(Instrument):
             raise Warning('%s set_modulation_mode_wavelength2 failed because the response was: %s.' % (self._name, reply))
 
     def do_get_modulation_mode_frequency(self):
+        '''Get the switching frequency for two wavelength modulation mode'''
         logging.debug('Getting the modulation mode frequency.')
         reply = self.reply_error_check(self._visainstrument.ask('S77'))
         if reply.startswith('A77'):
@@ -537,20 +581,25 @@ class Superlum_BS_1060(Instrument):
             raise Warning('%s get_modulation_mode_frequency failed because the response was: %s.' % (self._name, reply))
 
     def do_set_modulation_mode_frequency(self, freq):
+        '''Set the switching frequency for two wavelength modulation mode'''
         logging.debug('Setting the modulation mode frequency.')
-        if freq in freqs:
-            i = freqs.index(freq)
-            print i 
-            laser_string = '%0*d' % (2,(i+1))
-            print laser_string
-            reply = self._visainstrument.ask('S87'+laser_string)
-            if reply == ('A87'+laser_string):
-                print 'Modulation mode frequency set to ' + str(freq)
+        if not self.get_optical_output():
+            if freq in freqs:
+                i = freqs.index(freq)
+                laser_string = '%0*d' % (2,(i+1))
+                reply = self._visainstrument.ask('S87'+laser_string)
+                if reply == ('A87'+laser_string):
+                    logging.info('Modulation mode frequency set to ' + 
+                                str(freq))
+                else:
+                    logging.error('Superlum modulation mode frequency rror: ' 
+                                + reply)
             else:
-                print 'Error: ' + reply
+                print 'Frequency not in allowed frequencies'
+                print 'Allowed frequencies' + str(freqs)
         else:
-            print 'Frequency not in allowed frequencies'
-            print 'Allowed frequencies' + str(freqs)
+            raise Warning('Superlum: Not possible to change modulation mode ' +
+                          'frequency while the optical output is active.')
 
     def reply_error_check(self, reply):
         '''

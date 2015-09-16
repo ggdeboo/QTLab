@@ -40,7 +40,8 @@ class LeCroy_Wavesurfer(Instrument):
 
     Usage:
     Initialize with
-    <name> = instruments.create('name', 'LeCroy_Wavesurfer', address='<VICP address>')
+    <name> = instruments.create('name', 'LeCroy_Wavesurfer', 
+                                address='<VICP address>')
     <VICP address> = VICP::<ip-address>
     '''
 
@@ -62,7 +63,21 @@ class LeCroy_Wavesurfer(Instrument):
         self._visainstrument = visa.instrument(self._address)
 #        self._values = {}
         self._visainstrument.clear()
+
+        self._idn = self._visainstrument.ask('*IDN?')
+        if '104MXs' in self._idn:
+            self._bandwidth = 1e9
+        if '64MXs' in self._idn:
+            self._bandwidth = 600e6
+        if '44MXs' in self._idn:
+            self._bandwidth = 400e6
+        if '24MXs' in self._idn:
+            self._bandwidth = 200e6
+
+        # All wavesurfer models have 4 input channels
         self._input_channels = ['C1', 'C2', 'C3', 'C4']
+        self._channels = self._input_channels + ['M1','M2','M3','M4','TA']
+
         #self._visainstrument.delay = 20e-3
 
         # Add parameters
@@ -129,17 +144,41 @@ class LeCroy_Wavesurfer(Instrument):
         self.add_parameter('max_memsize',
             flags=Instrument.FLAG_GETSET,
             type=types.IntType,
-            units='S',option_list=(10000000,5000000,2500000,1000000,500000,100000,10000,1000,500))
+            units='S',option_list=(10000000,
+                                5000000,
+                                2500000,
+                                1000000,
+                                500000,
+                                100000,
+                                10000,
+                                1000,
+                                500))
         self.add_parameter('samplerate',
             flags=Instrument.FLAG_GET,
             type=types.IntType,
             units='S/s',option_list=(),minval=500,maxval=5e9)
+        # trigger block
         self.add_parameter('trigger_source',
             flags=Instrument.FLAG_GET,
             type=types.StringType)
         self.add_parameter('trigger_type',
             flags=Instrument.FLAG_GET,
             type=types.StringType,)
+        self.add_parameter('trigger_mode',
+            flags=Instrument.FLAG_GETSET,
+            type=types.StringType,
+            option_list=('AUTO','NORM','SINGLE','STOP'),
+            )
+
+        # Math functions
+        self.add_parameter('math_function',
+            flags=Instrument.FLAG_GETSET,
+            type=types.StringType,
+            )
+        self.add_parameter('math_equation',
+            flags=Instrument.FLAG_GET,
+            type=types.StringType,
+            )
         
         self.add_function('arm_acquisition')
         self.add_function('get_all')
@@ -169,8 +208,9 @@ class LeCroy_Wavesurfer(Instrument):
         self.get('tdiv')
         self.get('max_memsize')
         self.get('samplerate')
-	self.get_trigger_source()
-	self.get_trigger_type()
+        self.get_trigger_source()
+        self.get_trigger_type()
+        self.get_trigger_mode()
 #            self.get_enhanced_resolution(ch_in)
 
 #    def do_get_enhanced_resolution(self, channel):
@@ -233,33 +273,17 @@ class LeCroy_Wavesurfer(Instrument):
         response = self._visainstrument.ask(channel+':CPL?')
         return response.lstrip(channel+':CPL ')
 
-    def set_trigger_normal(self):
+    def do_get_trigger_mode(self):
         '''
-        Change the trigger mode to Normal.
-
-        Input:
-            None
-
-        Output:
-            None
+        Get the trigger mode
         '''
-        logging.debug(__name__ + ' : Set trigger to normal')
-        self._visainstrument.write('TRMD NORMAL')
-      
+        return self._visainstrument.ask('TRMD?')
 
-    def set_trigger_auto(self):
+    def do_set_trigger_mode(self, trigger_mode):
         '''
-        Change the trigger mode to Auto.
-
-        Input:
-            None
-
-        Output:
-            None
+        Set the trigger mode.
         '''
-        logging.debug(__name__ + ' : Set trigger to auto')
-        self._visainstrument.write('TRMD AUTO')
-       
+        self._visainstrument.write('TRMD %s' % trigger_mode)
 
     def auto_setup(self):
         '''
@@ -271,11 +295,13 @@ class LeCroy_Wavesurfer(Instrument):
         Output:
             None
         '''
-        logging.info(__name__ + ' : Auto setup of vertical, timebase and trigger')
+        logging.info(__name__ + 
+                    ' : Auto setup of vertical, timebase and trigger')
         self._visainstrument.write('ASET')
         
         
-    def screen_dump(self, file, type='JPEG', background='BLACK', dir='C:\\', area='FULLSCREEN'):
+    def screen_dump(self, file, type='JPEG', background='BLACK', 
+                    dir='C:\\', area='FULLSCREEN'):
         '''
         Initiate a screen dump
 
@@ -353,7 +379,8 @@ class LeCroy_Wavesurfer(Instrument):
     def do_get_eres_bits(self, channel):
         '''
         Get the number of ERES bits for a channel.
-        Since I haven't figured out a direct command, we'll just extract it from a measured waveform.
+        Since I haven't figured out a direct command, we'll just extract it 
+        from a measured waveform.
         '''
         old_memsize = self.get_max_memsize()
         self.set_max_memsize(500)
@@ -371,7 +398,7 @@ class LeCroy_Wavesurfer(Instrument):
 
     def do_get_eres_bandwidth(self, channel):
 	'''
-	Calculate the bandwidth of a channel following the enhanced resolution option.
+	Calculate the bandwidth of a channel with the enhanced resolution option.
 	'''
 	bits = self.do_get_eres_bits(channel)
 	Nyquist = self.get_samplerate()/2
@@ -407,7 +434,8 @@ class LeCroy_Wavesurfer(Instrument):
             None
         '''
         logging.info(__name__ + ' : Setting up waveform storage')
-        self._visainstrument.write('STST %s, %s, AUTO, %s, FORMAT, %s' % (channel, destination, mode, filetype))
+        self._visainstrument.write('STST %s, %s, AUTO, %s, FORMAT, %s' % 
+                                    (channel, destination, mode, filetype))
 
     def do_set_max_memsize(self, memsize):
         '''
@@ -440,8 +468,8 @@ class LeCroy_Wavesurfer(Instrument):
 
         Input:
             Time to measure, Maximum measurement size (Inputs possible = 50
-            0, 1000, 2500, 5000, 10K, 25K, 50K, 100K, 250K, 500K, 1MA, 2.5MA, 5MA, 10MA, 25MA)
-            
+            0, 1000, 2500, 5000, 10K, 25K, 50K, 100K, 250K, 500K, 1MA, 2.5MA, 
+            5MA, 10MA, 25MA)
 
         Output:
             None
@@ -458,8 +486,8 @@ class LeCroy_Wavesurfer(Instrument):
 
         Input:
             Time to measure, Maximum measurement size (Inputs possible = 50
-            0, 1000, 2500, 5000, 10K, 25K, 50K, 100K, 250K, 500K, 1MA, 2.5MA, 5MA, 10MA, 25MA)
-            
+            0, 1000, 2500, 5000, 10K, 25K, 50K, 100K, 250K, 500K, 1MA, 2.5MA, 
+            5MA, 10MA, 25MA)
 
         Output:
             None
@@ -469,13 +497,15 @@ class LeCroy_Wavesurfer(Instrument):
 
     def get_waveform_memory(self, channel, xdata=True):
         '''
-        Reads out the data directly from the memory. By doing this it also changes the format to 'word', which is    a 16-bit read-out, instead of other possible options as 8-bit for example.
+        Reads out the data directly from the memory. By doing this it also 
+        changes the format to 'word', which is    a 16-bit read-out, instead 
+        of other possible options as 8-bit for example.
+
         Output:
-        Ydata = numpy array with measured values
-        Xdata = numpy array with x axis values
+            Ydata = numpy array with measured values
+            Xdata = numpy array with x axis values
         '''
         # Need a check to figure out whether the trace is on the display.
-
         self._visainstrument.write('COMM_FORMAT DEF9,WORD,BIN')
         rawdata = self._visainstrument.ask(channel+':WAVEFORM?')
         #Channel can be C1, C2, C3 or C4
@@ -490,7 +520,8 @@ class LeCroy_Wavesurfer(Instrument):
         Xgain = struct.unpack('f',rawdata[176+offset:176+floating+offset])
         nominal_bits = struct.unpack('h',rawdata[172+offset:174+offset])
         eres_bits = nominal_bits[0] - 8
-        logging.debug('Number of enhanced resolution bits of channel %s is %.1f.' %(channel, eres_bits))
+        logging.debug('Number of enhanced resolution bits of channel %s is %.1f.' 
+                        %(channel, eres_bits))
         
         
         datapoints = len(rawdata[data_array_start+offset:])/2.0
@@ -500,17 +531,94 @@ class LeCroy_Wavesurfer(Instrument):
         else:
             lastnumber = len(rawdata)-1           
         
-        logging.debug('Number of datapoints according to LeCroy %s is %.1f.' %(channel, datapoints))
+        logging.debug('Number of datapoints according to LeCroy %s is %.1f.' 
+                        % (channel, datapoints))
 
-        data1 = struct.unpack(str(int(datapoints))+'h',rawdata[data_array_start+offset:lastnumber])
+        data1 = struct.unpack(str(int(datapoints))+'h',
+                                rawdata[data_array_start+offset:lastnumber])
 
-        YVperDIV = {'(0,)': 1e-6, '(1,)': 2e-6, '(2,)': 5e-6, '(3,)': 10e-6, '(4,)': 20e-6, '(5,)': 50e-6, '(6,)': 100e-6, '(7,)': 200e-6, '(8,)': 500e-6, '(9,)': 1e-3, '(10,)': 2e-3, '(11,)': 5e-3, '(12,)': 10e-3, '(13,)': 20e-3, '(14,)': 50e-3, '(15,)': 100e-3, '(16,)': 200e-3, '(17,)': 500e-3, '(18,)': 1, '(19,)': 2, '(20,)': 5, '(21,)': 10, '(22,)': 20, '(23,)': 50, '(24,)': 100, '(25,)': 200, '(26,)': 500, '(27,)': 1e3}
+        YVperDIV = {'(0,)': 1e-6, 
+                    '(1,)': 2e-6, 
+                    '(2,)': 5e-6, 
+                    '(3,)': 10e-6, 
+                    '(4,)': 20e-6, 
+                    '(5,)': 50e-6, 
+                    '(6,)': 100e-6, 
+                    '(7,)': 200e-6, 
+                    '(8,)': 500e-6, 
+                    '(9,)': 1e-3, 
+                    '(10,)': 2e-3, 
+                    '(11,)': 5e-3, 
+                    '(12,)': 10e-3, 
+                    '(13,)': 20e-3, 
+                    '(14,)': 50e-3, 
+                    '(15,)': 100e-3, 
+                    '(16,)': 200e-3, 
+                    '(17,)': 500e-3, 
+                    '(18,)': 1, 
+                    '(19,)': 2, 
+                    '(20,)': 5, 
+                    '(21,)': 10, 
+                    '(22,)': 20, 
+                    '(23,)': 50, 
+                    '(24,)': 100, 
+                    '(25,)': 200, 
+                    '(26,)': 500, 
+                    '(27,)': 1e3}
 
         #YVperDIV is given in V/div.
 
         YVperDIVgain = YVperDIV[str(struct.unpack('h',rawdata[332+offset:334+offset]))]
 
-        XTIMEperDIV = {'(0,)': 1e-12, '(1,)': 2e-12, '(2,)': 5e-12, '(3,)': 10e-12, '(4,)': 20e-12, '(5,)': 50e-12, '(6,)': 100e-12, '(7,)': 200e-12, '(8,)': 500e-12, '(9,)': 1e-9, '(10,)': 2e-9, '(11,)': 5e-9, '(12,)': 10e-9, '(13,)': 20e-9, '(14,)': 50e-9, '(15,)': 100e-9, '(16,)': 200e-9, '(17,)': 500e-9, '(18,)': 1e-6, '(19,)': 2e-6, '(20,)': 5e-6, '(21,)': 10e-6, '(22,)': 20e-6, '(23,)': 50e-6, '(24,)': 100e-6, '(25,)': 200e-6, '(26,)': 500e-6, '(27,)': 1e-3, '(28,)': 2e-3, '(29,)': 5e-3, '(30,)': 10e-3, '(31,)': 20e-3, '(32,)': 50e-3, '(33,)': 100e-3, '(34,)': 200e-3, '(35,)': 500e-3, '(36,)': 1, '(37,)': 2, '(38,)': 5, '(39,)': 10, '(40,)': 20, '(41,)': 50, '(42,)': 100, '(43,)': 200, '(44,)': 500, '(45,)': 1e3, '(46,)': 2e3, '(47,)': 5e3, '(100,)': 0}
+        XTIMEperDIV = {'(0,)': 1e-12, 
+                    '(1,)': 2e-12, 
+                    '(2,)': 5e-12, 
+                    '(3,)': 10e-12, 
+                    '(4,)': 20e-12, 
+                    '(5,)': 50e-12, 
+                    '(6,)': 100e-12, 
+                    '(7,)': 200e-12, 
+                    '(8,)': 500e-12, 
+                    '(9,)': 1e-9, 
+                    '(10,)': 2e-9, 
+                    '(11,)': 5e-9, 
+                    '(12,)': 10e-9, 
+                    '(13,)': 20e-9, 
+                    '(14,)': 50e-9, 
+                    '(15,)': 100e-9, 
+                    '(16,)': 200e-9, 
+                    '(17,)': 500e-9, 
+                    '(18,)': 1e-6, 
+                    '(19,)': 2e-6, 
+                    '(20,)': 5e-6, 
+                    '(21,)': 10e-6, 
+                    '(22,)': 20e-6, 
+                    '(23,)': 50e-6, 
+                    '(24,)': 100e-6, 
+                    '(25,)': 200e-6, 
+                    '(26,)': 500e-6, 
+                    '(27,)': 1e-3, 
+                    '(28,)': 2e-3, 
+                    '(29,)': 5e-3, 
+                    '(30,)': 10e-3, 
+                    '(31,)': 20e-3, 
+                    '(32,)': 50e-3, 
+                    '(33,)': 100e-3, 
+                    '(34,)': 200e-3, 
+                    '(35,)': 500e-3, 
+                    '(36,)': 1, 
+                    '(37,)': 2, 
+                    '(38,)': 5,         
+                    '(39,)': 10, 
+                    '(40,)': 20, 
+                    '(41,)': 50, 
+                    '(42,)': 100, 
+                    '(43,)': 200, 
+                    '(44,)': 500, 
+                    '(45,)': 1e3, 
+                    '(46,)': 2e3, 
+                    '(47,)': 5e3, 
+                    '(100,)': 0}
 
         #XTIMEperDIV is given in seconds/div. WATCH OUT: EXTERNAL timing per div is not implemented in the program. The output on the X-axis will be equal to zero when external is chosen!
 
@@ -548,15 +656,16 @@ class LeCroy_Wavesurfer(Instrument):
 	    raise Warning('Unexpected response to TRSE?: %s' % response)
 
     def arm_acquisition(self):
-	'''
-	Send the ARM_ACQUISITION command. This armes the scope and forces a single acquisition.
-	'''
+        '''
+        Send the ARM_ACQUISITION command. 
+        This arms the scope and forces a single acquisition.
+        '''
         self._visainstrument.write('ARM_ACQUISITION')
 
     def stop_acquisition(self):
-	'''
-	Stop the acquisition.
-	'''
+        '''
+        Stop the acquisition.
+        '''
 	self._visainstrument.write('STOP')
 
     def get_esr(self):
@@ -573,6 +682,36 @@ class LeCroy_Wavesurfer(Instrument):
 
     def trigger(self):
         self._visainstrument.write('*TRG')
+
+    def _get_math_string(self, channel):
+        '''
+        '''
+        if channel not in self._channels:
+            raise ValueError('Wavesurfer: channel not allowed.')
+
+        return self._visainstrument.ask('%s:DEF?' % channel)
+
+    def do_get_math_equation(self):
+        '''Get the equation for the math channel'''
+        math_string = self._get_math_string('TA').split(',')
+        return math_string[1]
+
+    def do_get_math_function(self):
+        '''Get the function for the math channel'''
+        return self._get_math_string('TA').lstrip('F1:DEF ')
+
+    def do_set_math_function(self, math_string):
+        '''Set the function for the math channel
+
+        Examples:
+        EQN,"AVG(C1)",AVERAGETYPE,CONTINUOUS,SWEEPS,10 SWEEP,INVALIDINPUTPOLICY,RESET
+        EQN,"AVG(C1)",AVERAGETYPE,CONTINUOUS,SWEEPS,10 SWEEP,INVALIDINPUTPOLICY,SKIP
+        EQN,"AVG(C1)",AVERAGETYPE,SUMMED,SWEEPS,10 SWEEP,INVALIDINPUTPOLICY,SKIP
+        EQN,"ABS(C1)"
+        EQN,"DERI(C1)",VERSCALE,2 V/S, VEROFFSET,-384E-3 V/S,ENABLEATOSCALE,ON'
+            
+        '''
+        self._visainstrument.write('TA:DEF %s' % math_string)
 
 
 # Next thing doesn't work yet, because in the transfer to the instrument visa throws away the \' needed to specify what file to get... Do not know how to solve this...
