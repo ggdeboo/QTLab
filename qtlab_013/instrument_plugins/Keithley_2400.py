@@ -22,6 +22,7 @@ import visa
 import types
 import logging
 import qt
+from numpy import zeros, fromstring
 
 class Keithley_2400(Instrument):
     '''
@@ -94,6 +95,14 @@ class Keithley_2400(Instrument):
                 'voltage',
                 'current',
                 'memory'))
+        self.add_parameter('measurement_function',
+            type=types.StringType,
+            flags=Instrument.FLAG_GET,
+            option_list=(
+                'voltage',
+                'current',
+                'resistance')
+                )
         self.add_parameter('voltage_source_mode',
             type=types.StringType,
             flags=Instrument.FLAG_GETSET,
@@ -135,7 +144,7 @@ class Keithley_2400(Instrument):
 
         self.add_parameter('concurrent_measurements',
             type=types.BooleanType,
-            flags=Instrument.FLAG_GET)
+            flags=Instrument.FLAG_GETSET)
         self.add_parameter('concurrent_measurement_functions',
             type=types.StringType,
             flags=Instrument.FLAG_GET)
@@ -155,6 +164,36 @@ class Keithley_2400(Instrument):
             type=types.FloatType,
             flags=Instrument.FLAG_GET)
 
+        # trigger parameters
+        self.add_parameter('trigger_source',
+            type=types.StringType,
+            flags=Instrument.FLAG_GETSET,
+            option_list = ('immediate',
+                            'tlink') 
+            )
+        self.add_parameter('arm_source',
+            type=types.StringType,
+            flags=Instrument.FLAG_GETSET,
+            option_list = ('immediate',
+                            'bus',
+                            'tlink',
+                            'timer',
+                            'manual',
+                            'bus',
+                            'nstest',
+                            'pstest',
+                            'bstest'),
+            )
+        self.add_parameter('arm_count',
+            type=types.IntType,
+            flags=Instrument.FLAG_GETSET,
+            minval=1, maxval=2500)
+
+        # buffer
+        self.add_parameter('buffer_size',
+            type=types.IntType,
+            flags=Instrument.FLAG_GETSET,
+            minval=1, maxval=2500)
 			
         self.add_function('beep')
 
@@ -193,6 +232,9 @@ class Keithley_2400(Instrument):
         self.get_integration_rate()
         self.get_auto_zero()
         self.get_line_frequency()
+        self.get_trigger_source()
+        self.get_arm_source()
+        self.get_arm_count()
     
     def reset(self):
         '''
@@ -207,63 +249,6 @@ class Keithley_2400(Instrument):
         '''
         logging.debug('Resetting instrument to default GPIB operation')
         self._visainstrument.write('*RST')
-
-#    def set_voltage_ramp(self, voltage_step, voltage_step_time): #this section was blanked out
-#        '''
-#        Set voltage ramp settings, default values set in "__init__"
-#
-#        Input:
-#            voltage step and voltage step time
-#        Output:
-#            none
-#        '''
-#        self._voltage_step = voltage_step
-#        self._voltage_step_time = voltage_step_time
-        
-#    def set_voltage(self, voltage):
-#        '''
-#        Ramps voltage to desired value
-#
-#        Input:
-#            Ramp voltage in Volts to a specified value according to ramp settings in __init__
-#
-#        Output:
-#            Actual voltage after ramp is performed
-#        '''
-#        start_voltage = self.get_value(1)
-#        
-#        step = self._voltage_step * cmp(voltage, start_voltage)
-#        step_time = self._voltage_step_time
-#        voltage_ramp = []
-#        if not(step == 0):
-#            Nramp = int(abs((start_voltage - voltage) / step))
-#            voltage_ramp = [x * step + start_voltage for x in range(Nramp + 1)]
-#            voltage_ramp.append(voltage)
-#        else:
-#            voltage_ramp = [start_voltage, voltage]
-#        
-#        self.set_source_mode(1, 1)
-#        for v in voltage_ramp:
-#            self.set_source_amplitude(1, v)
-#            qt.msleep(step_time)
-#            self.get_value(2)
-#        return self.get_value(1)
-
-#    def set_terminals(self, terminal):
-#        '''
-#        Set terminals to be used
-#        
-#        Input:
-#            1: Use front terminals
-#            2: Rear terminals
-#        Output:
-#            None
-#        '''
-#        termlib = {
-#            1: 'FRONT',
-#            2: 'REAR'}
-#        logging.debug('Setting instrument to use ' + termlib[terminal] + ' terminals')
-#        self._visainstrument.write(':ROUT:TERM ' + termlib[terminal])
 
     def do_get_terminals(self):
         '''
@@ -300,22 +285,6 @@ class Keithley_2400(Instrument):
         logging.debug('Setting the terminal used by %s.' %self.get_name())
         logging.info('Setting the terminal used by %s to %s.' %(self.get_name(), terminal))
         self._visainstrument.write(':ROUT:TERM %s' %terminal)
-
-#    def set_source_function(self, function):
-#        '''
-#        Set sourcing function
-#
-#        Input:
-#            1: voltage mode
-#            2: current mode
-#        Output:
-#            None
-#        '''
-#        flib = {
-#            1: 'VOLT',
-#            2: 'CURR'}
-#        logging.debug('Set sourcing function to' + flib[function])
-#        self._visainstrument.write(':SOUR:FUNC ' + flib[function])
 
     def do_get_source_function(self):
         '''
@@ -356,28 +325,33 @@ class Keithley_2400(Instrument):
         '''
         logging.debug('Setting source function mode to %s.' %function)
         self._visainstrument.write(':SOUR:FUNC:MODE %s' %function)
-    
-#    def set_source_mode(self, function, mode):
-#        '''
-#        Set sourcing mode
-#
-#        Input:
-#            1: fixed
-#            2: list
-#            3: sweep
-#        Output:
-#            None
-#        '''
-#        flib = {
-#            1: 'VOLT',
-#            2: 'CURR'}
-#        source = {
-#            1: 'FIX',
-#            2: 'LIST',
-#            3: 'SWE'}
-#        logging.debug('Set ' + flib[function] + ' sourcing to' + source[mode])
-#        self._visainstrument.write(':SOUR:' + flib[function] + ':MODE ' + source[mode])
+        
+    def do_get_measure_function(self):
+        '''
+        Get measurement function.
 
+        Input:
+            None
+        Output:
+            'voltage'
+            'current'
+            'resistance'
+        '''
+        logging.debug('Getting measurement function.')
+        reply = self._visainstrument.ask(':SENS:FUNC:ON?')
+        if 'VOLT' in reply:
+            logging.info('Measurement function of %s is voltage.' % self.get_name())
+            return 'voltage'
+        
+#            logging.info('Source function of %s is current.' % self.get_name())
+#            return 'current'
+#        elif reply == 'MEM':
+#            logging.info('Source function of %s is memory.' % self.get_name())
+#            return 'memory'
+#        else:
+#            logging.warning('get_source_function: Received unexpected response from %s.' %self.get_name())
+#            raise Warning('Instrument %s responded with an unexpected response: %s.' %(self.get_name(),reply))
+    
     def do_get_voltage_source_mode(self):
         '''
         Get voltage sourcing mode
@@ -475,23 +449,6 @@ class Keithley_2400(Instrument):
         logging.debug('Select measurement range: ' + str(range) + flib[function])
         self._visainstrument.write(':SOUR:' + flib[function] +':RANG ' + str(range))
 
-#    def set_source_amplitude(self, function, amplitude):
-#       '''
-#        Set source amplitude in volts or amps
-#        
-#        Input:
-#            1           : voltage mode
-#            2           : current mode
-#            amplitude   : range in volts or amps
-#        Output:
-#            None
-#        '''
-#        flib = {
-#            1: 'VOLT',
-#            2: 'CURR'}
-#        logging.debug('Set source amplitude to ' + str(amplitude))
-#        self._visainstrument.write(':SOUR:' + flib[function] + ':LEV ' + str(amplitude))
-
     def enable_measure_function(self, function):
         '''
         Enables measure function
@@ -525,23 +482,6 @@ class Keithley_2400(Instrument):
         logging.debug('Disable measure function of' + flib[function])
         self._visainstrument.write(':SENS:FUNC:OFF ' + flib[function])
         self.get_concurrent_measurement_functions()
-
-#    def set_compliance(self, function, compliance):
-#        '''
-#        Set compliance value in volts or amps
-#
-#        Input:
-#            1          : voltage compliance
-#            2          : current compliance
-#            compliance : compliance in volts or amps
-#        Output:
-#            None
-#        '''
-#        flib = {
-#            1: 'VOLT',
-#            2: 'CURR'}
-#        logging.debug('Set compliance to ' + str(compliance) + ' ' + flib[function])
-#        self._visainstrument.write(':SENS:' + flib[function] + ':PROT ' + str(compliance))
 
     def do_set_current_compliance(self, compliance):
         '''
@@ -766,7 +706,17 @@ class Keithley_2400(Instrument):
 
     def do_get_concurrent_measurements(self):
         answer = self._visainstrument.ask(':SENS:FUNC:CONC?')
-        return bool(answer)
+        return bool(int(answer))
+        
+    def do_set_concurrent_measurements(self, enabled):
+        '''Enable or disable measuring more than one function simultaneously. 
+           
+           When disabled, volts function is enabled.
+        '''
+        if enabled:
+            self._visainstrument.write(':SENS:FUNC:CONC ON')
+        else:
+            self._visainstrument.write(':SENS:FUNC:CONC OFF')
 		
     def do_get_concurrent_measurement_functions(self):
         return self._visainstrument.ask(':SENS:FUNC:ON?')
@@ -877,3 +827,172 @@ class Keithley_2400(Instrument):
         logging.debug('Making a beep with %s.' %self.get_name())
         self._visainstrument.write('SYST:BEEP %f, %f' % (freq, length))
 
+    def get_trace_buffer_contents(self):
+        '''
+        Get the contents of the buffer.
+
+        Returns a numpy array
+        '''
+        n_readings = int(self._visainstrument.ask(':TRAC:POIN:ACT?'))
+        logging.info('Number of stored readings in buffer: %i' % 
+                        n_readings)
+        trace = zeros(int(n_readings))
+        if n_readings == 0:
+            return trace
+        else:
+            self._visainstrument.timeout = 4
+            trace_data = self._visainstrument.ask(':TRAC:DATA?')
+        self._visainstrument.timeout = 1
+        trace = fromstring(trace_data, sep=',')
+        return trace
+
+    def clear_trace_buffer(self):
+        '''
+        Clear the contents of the trace buffer.
+        '''
+        self._visainstrument.write(':TRAC:CLE')
+
+    def trigger(self):
+        '''
+        Send a trigger command to the sourcemeter
+        '''
+        self._visainstrument.write('*TRG')
+
+    def do_get_trigger_source(self):
+        '''
+        Get the source of the trigger.
+        '''
+        trigger_source = self._visainstrument.ask(':TRIG:SOUR?')
+        if trigger_source == 'IMM':
+            return 'immediate'
+        elif trigger_source == 'TLIN':
+            return 'tlink'
+        elif trigger_source == 'BUS':
+            return 'bus'
+        else:
+            logging.info('Trigger source query replied with: %s ' 
+                            % trigger_source)
+
+    def do_set_trigger_source(self, trigger_source):
+        '''
+        Set the source of the trigger.
+        '''
+        logging.info('Setting trigger source to %s'
+            % trigger_source)
+        if trigger_source == 'IMMEDIATE':
+            self._visainstrument.write(':TRIG:SOUR IMM')
+        elif trigger_source == 'TLINK':
+            self._visainstrument.write(':TRIG:SOUR TLIN')
+
+    def do_get_arm_source(self):
+        '''
+        Get the source of the arm subroutine
+        '''
+        arm_source = self._visainstrument.ask(':ARM:SOUR?')
+        if arm_source == 'IMM':
+            return 'immediate'
+        elif arm_source == 'TLIN':
+            return 'tlink'
+        elif arm_source == 'TIM':
+            return 'timer'
+        elif arm_source == 'MAN':
+            return 'manual'
+        elif arm_source == 'BUS':
+            return 'bus'
+        elif arm_source == 'NST':
+            return 'nstest'
+        elif arm_source == 'PST':
+            return 'pstest'
+        elif arm_source == 'BST':
+            return 'bstest'
+        else:
+            logging.error('Arm source query replied with: %s ' 
+                            % arm_source)
+
+    def do_set_arm_source(self, arm_source):
+        '''
+        '''
+        if arm_source == 'IMMEDIATE':
+            self._visainstrument.write(':ARM:SOUR IMM')
+        elif arm_source == 'TLINK':
+            self._visainstrument.write(':ARM:SOUR TLIN')
+        elif arm_source == 'TIMER':
+            self._visainstrument.write(':ARM:SOUR TIM')
+        elif arm_source == 'MANUAL':
+            self._visainstrument.write(':ARM:SOUR MAN')
+        elif arm_source == 'BUS':
+            self._visainstrument.write(':ARM:SOUR BUS')
+        elif arm_source == 'NSTEST':
+            self._visainstrument.write(':ARM:SOUR NST')
+        elif arm_source == 'PSTEST':
+            self._visainstrument.write(':ARM:SOUR PST')
+        elif arm_source == 'BSTEST':
+            self._visainstrument.write(':ARM:SOUR BST')
+
+    def do_get_arm_count(self):
+        '''
+        '''
+        arm_count = int(self._visainstrument.ask(':ARM:COUN?'))
+        return arm_count
+
+    def do_set_arm_count(self, arm_count):
+        '''
+        '''
+        self._visainstrument.write(':ARM:COUN %i' % arm_count)
+
+    def initiate(self):
+        '''
+        Send the initiate command
+        '''
+        self._visainstrument.write(':INIT')
+
+    def abort(self):
+        '''
+        Reset the trigger system. Goes to idle state.
+        '''
+        self._visainstrument.write(':ABOR')
+
+    def read_error_queue(self):
+        '''
+        '''
+        return self._visainstrument.ask(':SYST:ERR?')
+
+#    def store_buffer_readings(self, count):
+#        '''
+#        '''
+#        self._visainstrument.write('TRAC:POIN %i' % count)
+
+    def enable_buffer(self):
+        '''
+        '''
+        self._visainstrument.write('TRAC:FEED:CONT NEXT')
+
+    def disable_buffer(self):
+        '''
+        '''
+        self._visainstrument.write('TRAC:FEED:CONT NEV')
+
+    def do_get_buffer_size(self):
+        '''
+        '''
+        buffer_size = int(self._visainstrument.ask('TRAC:POIN?'))
+        return buffer_size
+
+    def do_set_buffer_size(self, buffer_size):
+        '''
+        '''
+        self._visainstrument.write('TRAC:POIN %i' % buffer_size)
+
+    def set_format_elements(self, elements):
+        '''
+        '''
+        element_string = ''
+        for element in elements:
+            element_string += element
+        print(element_string)
+        self._visainstrument.write(':FORM:ELEM %s' % element_string) 
+
+    def clear_communication(self):
+        '''
+        '''
+        self._visainstrument.clear()

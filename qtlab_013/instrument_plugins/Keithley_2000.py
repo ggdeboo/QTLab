@@ -94,13 +94,16 @@ class Keithley_2000(Instrument):
             type=types.BooleanType)
         self.add_parameter('trigger_count',
             flags=Instrument.FLAG_GETSET,
-            units='#', type=types.IntType)
+            units='#', type=types.IntType,
+            minval=1)
         self.add_parameter('trigger_delay',
             flags=Instrument.FLAG_GETSET,
             units='s', minval=0, maxval=999999.999, type=types.FloatType)
         self.add_parameter('trigger_source',
             flags=Instrument.FLAG_GETSET,
-            units='')
+            type=types.StringType,
+            option_list=('immediate', 'external', 'timer', 'manual', 'bus')
+            )
         self.add_parameter('trigger_timer',
             flags=Instrument.FLAG_GETSET,
             units='s', minval=0.001, maxval=99999.999, type=types.FloatType)
@@ -141,6 +144,12 @@ class Keithley_2000(Instrument):
             flags=Instrument.FLAG_GETSET,
             units='',
             type=types.BooleanType)
+
+        # buffer
+        self.add_parameter('buffer_size',
+            type=types.IntType,
+            flags=Instrument.FLAG_GETSET,
+            minval=2, maxval=1024)
 
         # Add functions to wrapper
         self.add_function('set_mode_volt_ac')
@@ -245,6 +254,7 @@ class Keithley_2000(Instrument):
         self.get_averaging_count()
         self.get_averaging_type()
         self.get_autorange()
+        self.get_buffer_size()
 
 # Link old read and readlast to new routines:
     # Parameters are for states of the machnine and functions
@@ -730,7 +740,17 @@ class Keithley_2000(Instrument):
             None
         '''
         logging.debug('Set Trigger source to %s' % val)
-        self._set_func_par_value('TRIG', 'SOUR', val)
+        if val == 'IMMEDIATE':
+            value = 'IMM'
+        elif val == 'EXTERNAL':
+            value = 'EXT'
+        elif val == 'TIMER':
+            value = 'TIM'
+        elif val == 'MANUAL':
+            value = 'MAN'
+        elif val == 'BUS':
+            value = 'BUS'
+        self._set_func_par_value('TRIG', 'SOUR', value)
 
     def do_get_trigger_source(self):
         '''
@@ -743,7 +763,20 @@ class Keithley_2000(Instrument):
             source (string) : The trigger source
         '''
         logging.debug('Getting trigger source')
-        return self._get_func_par('TRIG', 'SOUR')
+        trigger_source = self._get_func_par('TRIG', 'SOUR')
+        if trigger_source == 'IMM':
+            return 'immediate'
+        elif trigger_source == 'EXT':
+            return 'external'
+        elif trigger_source == 'TIM':
+            return 'timer'
+        elif trigger_source == 'MAN':
+            return 'manual'
+        elif trigger_source == 'BUS':
+            return 'bus'
+        else:
+            logging.error('Get trigger source response unrecognized: %s'
+                          % trigger_source)
 
     def do_set_trigger_timer(self, val):
         '''
@@ -1009,6 +1042,8 @@ class Keithley_2000(Instrument):
         elif ans.startswith('MOV'):
             ans='moving'
         return ans
+
+
 # --------------------------------------
 #           Internal Routines
 # --------------------------------------
@@ -1089,3 +1124,61 @@ class Keithley_2000(Instrument):
         if self._change_autozero:
             self.set_autozero(True)
 
+    def trigger(self):
+        '''
+        Send a trigger command to the sourcemeter
+        '''
+        self._visainstrument.write('*TRG')
+
+    def initiate(self):
+        '''
+        Send the initiate command
+        '''
+        self._visainstrument.write(':INIT')
+
+    def abort(self):
+        '''
+        Reset the trigger system. Goes to idle state.
+        '''
+        self._visainstrument.write(':ABOR')
+
+    def enable_buffer(self):
+        '''
+        '''
+        self._visainstrument.write('TRAC:FEED:CONT NEXT')
+
+    def disable_buffer(self):
+        '''
+        '''
+        self._visainstrument.write('TRAC:FEED:CONT NEV')
+
+    def do_get_buffer_size(self):
+        '''
+        '''
+        buffer_size = int(self._visainstrument.ask('TRAC:POIN?'))
+        return buffer_size
+
+    def do_set_buffer_size(self, buffer_size):
+        '''
+        '''
+        self._visainstrument.write('TRAC:POIN %i' % buffer_size)
+
+    def clear_trace_buffer(self):
+        '''
+        Clear the contents of the trace buffer.
+        '''
+        self._visainstrument.write(':TRAC:CLE')
+
+    def get_trace_buffer_contents(self):
+        '''
+        Get the contents of the buffer.
+
+        Returns a numpy array
+        '''
+        self._visainstrument.timeout = 4
+        trace_data = self._visainstrument.ask(':TRAC:DATA?')
+        self._visainstrument.timeout = 1
+        trace = numpy.fromstring(trace_data, sep=',')
+        if (len(trace) == 1) and (trace[0] == -1.0):
+            logging.info('Trace buffer was empty')
+        return trace
