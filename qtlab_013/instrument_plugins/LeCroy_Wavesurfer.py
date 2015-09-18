@@ -77,6 +77,7 @@ class LeCroy_Wavesurfer(Instrument):
         # All wavesurfer models have 4 input channels
         self._input_channels = ['C1', 'C2', 'C3', 'C4']
         self._channels = self._input_channels + ['M1','M2','M3','M4','TA']
+        self._trig_source_options = ['C1','C2','C3','C4','LINE','EX','EX10']
 
         #self._visainstrument.delay = 20e-3
 
@@ -95,9 +96,10 @@ class LeCroy_Wavesurfer(Instrument):
 #                get_func=self.do_get_enhanced_resolution,
 #                channel=ch_in)
             self.add_parameter(ch_in+'_vdiv',
-                flags=Instrument.FLAG_GET,
+                flags=Instrument.FLAG_GETSET,
                 type=types.FloatType,
                 get_func=self.do_get_vdiv,
+                set_func=self.do_set_vdiv,
                 channel=ch_in,
                 units='V')
 #            self.add_parameter(ch_in+'_tdiv',
@@ -107,36 +109,41 @@ class LeCroy_Wavesurfer(Instrument):
 #                channel=ch_in,
 #                units='s')
             self.add_parameter(ch_in+'_vertical_offset',
-                flags=Instrument.FLAG_GET,
+                flags=Instrument.FLAG_GETSET,
                 type=types.FloatType,
                 get_func=self.do_get_voffset,
+                set_func=self.do_set_voffset,
                 channel=ch_in,
                 units='V'
                 )        
             self.add_parameter(ch_in+'_trace_on_display',
-                flags=Instrument.FLAG_GET,
+                flags=Instrument.FLAG_GETSET,
                 type=types.BooleanType,
                 get_func=self.do_get_trace_on_display,
+                set_func=self.do_set_trace_on_display,
                 channel=ch_in,
                 )
             self.add_parameter(ch_in+'_coupling',
-                flags=Instrument.FLAG_GET,
+                flags=Instrument.FLAG_GETSET,
                 type=types.StringType,
                 get_func=self.do_get_coupling,
+                set_func=self.do_set_coupling,
+                channel=ch_in,
+                option_list=('A1M','D1M','D50','GND'),
+                )
+            self.add_parameter(ch_in+'_eres_bits',
+                flags=Instrument.FLAG_GET,
+                type=types.FloatType,
+                get_func=self.do_get_eres_bits,
                 channel=ch_in,
                 )
-	    self.add_parameter(ch_in+'_eres_bits',
-	        flags=Instrument.FLAG_GET,
-	        type=types.FloatType,
-		get_func=self.do_get_eres_bits,
-		channel=ch_in,
-		)
-	    self.add_parameter(ch_in+'_eres_bandwidth',
-	        flags=Instrument.FLAG_GET,
-		type=types.FloatType,
-		get_func=self.do_get_eres_bandwidth,
-		channel=ch_in,
-		)
+            self.add_parameter(ch_in+'_eres_bandwidth',
+                flags=Instrument.FLAG_GET,
+                type=types.FloatType,
+                get_func=self.do_get_eres_bandwidth,
+                channel=ch_in,
+                )
+
         self.add_parameter('tdiv',
             flags=Instrument.FLAG_GETSET,
             type=types.FloatType,
@@ -159,15 +166,27 @@ class LeCroy_Wavesurfer(Instrument):
             units='S/s',option_list=(),minval=500,maxval=5e9)
         # trigger block
         self.add_parameter('trigger_source',
-            flags=Instrument.FLAG_GET,
-            type=types.StringType)
+            flags=Instrument.FLAG_GETSET,
+            type=types.StringType,
+            option_list=tuple(self._trig_source_options),
+            )
         self.add_parameter('trigger_type',
             flags=Instrument.FLAG_GET,
-            type=types.StringType,)
+            type=types.StringType,
+            )
         self.add_parameter('trigger_mode',
             flags=Instrument.FLAG_GETSET,
             type=types.StringType,
             option_list=('AUTO','NORM','SINGLE','STOP'),
+            )
+        self.add_parameter('trigger_level',
+            flags=Instrument.FLAG_GETSET,
+            type=types.FloatType,
+            )
+        self.add_parameter('trigger_slope',
+            flags=Instrument.FLAG_GETSET,
+            type=types.StringType,
+            option_list=('POS','NEG')
             )
 
         # Math functions
@@ -203,14 +222,16 @@ class LeCroy_Wavesurfer(Instrument):
             self.get(ch_in+'_vertical_offset')
             self.get(ch_in+'_trace_on_display')
             self.get(ch_in+'_coupling')
-	    self.get(ch_in+'_eres_bits')
-	    self.get(ch_in+'_eres_bandwidth')
+            self.get(ch_in+'_eres_bits')
+            self.get(ch_in+'_eres_bandwidth')
         self.get('tdiv')
         self.get('max_memsize')
         self.get('samplerate')
         self.get_trigger_source()
         self.get_trigger_type()
         self.get_trigger_mode()
+        #self.get_trigger_level()
+        self.get_trigger_slope()
 #            self.get_enhanced_resolution(ch_in)
 
 #    def do_get_enhanced_resolution(self, channel):
@@ -235,6 +256,14 @@ class LeCroy_Wavesurfer(Instrument):
         logging.debug(__name__ + ' : Get volts per div %s.' %channel)
         response = self._visainstrument.ask(channel+':VDIV?')
         return float(response.lstrip(channel+':VDIV').rstrip('V'))  
+
+    def do_set_vdiv(self, vdiv, channel):
+        '''
+        Set the volts per division.
+        '''
+        logging.debug(__name__ + ' : Set the volts per div for channel %s.' %
+                        channel)
+        self._visainstrument.write('%s:VDIV %.3fV' % (channel, vdiv))
 
     def do_get_tdiv(self):
         '''
@@ -262,6 +291,9 @@ class LeCroy_Wavesurfer(Instrument):
         response = self._visainstrument.ask(channel+':OFFSET?')
         return float(response.lstrip(channel+':OFFSET').rstrip('V'))
 
+    def do_set_voffset(self, offset, channel):
+        self._visainstrument.write('%s:OFFSET %.3fV' % (channel, offset))
+
     def do_get_trace_on_display(self, channel):
         response = self._visainstrument.ask(channel+':TRACE?')
         if response.lstrip(channel+':TRA ') == 'ON':
@@ -269,15 +301,30 @@ class LeCroy_Wavesurfer(Instrument):
         else:
             return False
 
+    def do_set_trace_on_display(self, enable, channel):
+        '''
+        Set whether the trace is displayd or not
+        '''
+        if enable:
+            self._visainstrument.write('%s:TRA ON' % channel)
+        else:
+            self._visainstrument.write('%s:TRA OFF' % channel)
+
     def do_get_coupling(self, channel):
         response = self._visainstrument.ask(channel+':CPL?')
         return response.lstrip(channel+':CPL ')
+
+    def do_set_coupling(self, coupling, channel):
+        '''
+        Set the input coupling of the oscilloscope channel
+        '''
+        self._visainstrument.write('%s:CPL %s' % (channel, coupling))
 
     def do_get_trigger_mode(self):
         '''
         Get the trigger mode
         '''
-        return self._visainstrument.ask('TRMD?')
+        return self._visainstrument.ask('TRMD?').lstrip(' TRMD')
 
     def do_set_trigger_mode(self, trigger_mode):
         '''
@@ -315,8 +362,11 @@ class LeCroy_Wavesurfer(Instrument):
         Output:
             None
         '''
-        logging.info(__name__ + ' : Take a screenshot with filename %s, type %s and save on harddisk %s' % (file, type, dir))
-        self._visainstrument.write('HCSU DEV, %s, BCKG, %s, DEST, FILE, DIR, %s, FILE, %s, AREA, %s; SCDP' % (type, background, dir, file, area))
+        logging.info(__name__ + ' : Take a screenshot with filename %s, type' + 
+                            ' %s and save on harddisk %s' % (file, type, dir))
+        self._visainstrument.write('HCSU DEV, %s, BCKG, %s, DEST, FILE, DIR,' 
+                                    ' %s, FILE, %s, AREA, %s; SCDP' 
+                                    % (type, background, dir, file, area))
         
     def do_set_tdiv(self, time):
         '''
@@ -397,15 +447,15 @@ class LeCroy_Wavesurfer(Instrument):
         return eres_bits
 
     def do_get_eres_bandwidth(self, channel):
-	'''
-	Calculate the bandwidth of a channel with the enhanced resolution option.
-	'''
-	bits = self.do_get_eres_bits(channel)
-	Nyquist = self.get_samplerate()/2
-	if bits == 0:
-	    return Nyquist
-	bw_table = {0.5:0.5, 1.0:0.241, 1.5:0.121, 2.0:0.058, 3.0:0.016}
-	return bw_table[bits]*Nyquist
+        '''
+        Calculate the bandwidth of a channel with the enhanced resolution option.
+        '''
+        bits = self.do_get_eres_bits(channel)
+        Nyquist = self.get_samplerate()/2
+        if bits == 0:
+            return Nyquist
+        bw_table = {0.5:0.5, 1.0:0.241, 1.5:0.121, 2.0:0.058, 3.0:0.016}
+        return bw_table[bits]*Nyquist
 
     def reset(self):
         '''
@@ -420,7 +470,8 @@ class LeCroy_Wavesurfer(Instrument):
         logging.info(__name__ + ' : Resetting Instrument')
         self._visainstrument.clear()
 
-    def setup_storage(self, channel='C1', destination='HDD', mode='OFF', filetype='MATLAB'):
+    def setup_storage(self, channel='C1', destination='HDD', mode='OFF', 
+                        filetype='MATLAB'):
         '''
         Sets up the waveform storage
 
@@ -634,26 +685,71 @@ class LeCroy_Wavesurfer(Instrument):
             return Ydata
 
     def do_get_trigger_source(self):
-	'''
-	Get the source for the trigger.
-	'''
-	logging.debug(__name__ + ' Getting the source for the trigger.')
+        '''
+        Get the source for the trigger.
+        '''
+        logging.debug(__name__ + ' Getting the source for the trigger.')
         response = self._visainstrument.ask('TRSE?') # TRig_Select
-	if response.startswith('TRSE'):
-	    return response.lstrip('TRSE').split(',')[2]
+        if response.startswith('TRSE'):
+            return response.lstrip('TRSE').split(',')[2]
         else:
-	    raise Warning('Unexpected response to TRSE?: %s' % response)
+            raise Warning('Unexpected response to TRSE?: %s' % response)
+
+    def do_set_trigger_source(self, channel):
+        '''
+        Set the source for the trigger.
+        '''
+        trigger_type = self.get_trigger_type()
+        self._visainstrument.write('TRSE %s,SR,%s' % (trigger_type, channel))
 
     def do_get_trigger_type(self):
-	'''
-	Get the type for the trigger.
-	'''
-	logging.debug(__name__ + ' Getting the type for the trigger.')
+        '''
+        Get the type for the trigger.
+
+        DROP : Dropout
+        EDGE : Edge
+        GLIT : Glitch
+        '''
+        logging.debug(__name__ + ' Getting the type for the trigger.')
         response = self._visainstrument.ask('TRSE?') # TRig_Select
-	if response.startswith('TRSE'):
-	    return response.lstrip('TRSE').split(',')[0]
+        if response.startswith('TRSE'):
+            return response.lstrip('TRSE').split(',')[0].strip()
         else:
-	    raise Warning('Unexpected response to TRSE?: %s' % response)
+            raise Warning('Unexpected response to TRSE?: %s' % response)
+
+    def do_get_trigger_level(self):
+        '''
+        Get the trigger level for the active trigger source.
+        '''
+        logging.debug(__name__ + ' Getting the trigger level.')
+        response = self._visainstrument.ask('TRLV?')
+        start_idx = response.index('TRLV') + 5
+        end_idx = response.index('V,')
+        return float(response[start_idx:end_idx])
+
+    def do_set_trigger_level(self, trigger_level):
+        '''
+        Set the trigger level for the active trigger source.
+        '''
+        trigger_source = self.get_trigger_source()
+        self._visainstrument.write('%s:TRLV %.3fV' % 
+                                    (trigger_source, trigger_level))
+        
+    def do_get_trigger_slope(self):
+        '''
+        Get the trigger slope for the active trigger source.
+        '''
+        logging.debug(__name__ + ' Getting the trigger slope.')
+        trig_source = self.get_trigger_source()
+        response = self._visainstrument.ask('TRSL?')
+        return response.lstrip('%s:TRSL ' % trig_source)
+
+    def do_set_trigger_slope(self, slope):
+        '''
+        Set the trigger slope for the active trigger source.
+        '''
+        trigger_channel = self.get_trigger_source()
+        self._visainstrument.write('%s:TRSL %s' % (trigger_channel, slope))
 
     def arm_acquisition(self):
         '''
@@ -666,7 +762,7 @@ class LeCroy_Wavesurfer(Instrument):
         '''
         Stop the acquisition.
         '''
-	self._visainstrument.write('STOP')
+        self._visainstrument.write('STOP')
 
     def get_esr(self):
         '''
@@ -712,6 +808,10 @@ class LeCroy_Wavesurfer(Instrument):
             
         '''
         self._visainstrument.write('TA:DEF %s' % math_string)
+
+    def clear_sweeps(self):
+        '''Clears the sweeps in the math section'''
+        self._visainstrument.write('CLSW')
 
 
 # Next thing doesn't work yet, because in the transfer to the instrument visa throws away the \' needed to specify what file to get... Do not know how to solve this...
