@@ -21,6 +21,7 @@ from lib.dll_support import nidaq
 from instrument import Instrument
 import qt
 import numpy as np
+import logging
 
 def _get_channel(devchan):
     if not '/' in devchan:
@@ -50,6 +51,7 @@ class NI_DAQ(Instrument):
         Instrument.__init__(self, name, tags=['physical'])
 
         self._id = id
+        logging.info('NI daq device type: %s' % nidaq.get_device_type(id))
 
         self.add_parameter('chan_config',
             flags=Instrument.FLAG_SET|Instrument.FLAG_SOFTGET,
@@ -62,7 +64,6 @@ class NI_DAQ(Instrument):
             ch_in = _get_channel(ch_in)
             self.add_parameter(ch_in,
                 flags=Instrument.FLAG_GET,
-#                type=types.FloatType,    #Jan en Max changed 'type=types.FloatType' to 'type=types.ListType, if charge sensing is needed'
                 type=np.ndarray,
                 units='mV',
                 format='%.02f',
@@ -162,11 +163,32 @@ class NI_DAQ(Instrument):
     def _get_counter_channels(self):
         return nidaq.get_physical_counter_channels(self._id)
 
-    def do_get_input(self, channel, average=True, minvol = -10.0, maxvol = 10.0, trigger=False):
+    def do_get_input(self, channel, average=True, 
+                        minvol = -10.0, maxvol = 10.0, 
+                        trigger=False,
+                        trig_slope='POS',
+                        pre_trigger_samples=2,):
+        '''Read the specified number of samples from the input.'''
         # Gabriele added the average parameter
         devchan = '%s/%s' % (self._id, channel)
         #Jan added samples=self._samples and freq=self._fraq
-        values = nidaq.read(devchan, config=self._chan_config, samples=self._samples, freq=self._freq, averaging=average, minv=minvol, maxv=maxvol, triggered=trigger)
+        self._pre_trigger_samples = pre_trigger_samples
+        if self._pre_trigger_samples < 2 :
+            raise ValueError('The number of pre_trigger samples has to be ' +
+                                'larger than 1.')
+        if self._samples < (self._pre_trigger_samples + 2):
+            raise ValueError('The total number of samples has to be larger ' +
+                                'than the number of pre trigger samples + 1') 
+        values = nidaq.read(devchan, 
+                            config=self._chan_config, 
+                            samples=self._samples, 
+                            freq=self._freq, 
+                            averaging=average, 
+                            minv=minvol, 
+                            maxv=maxvol, 
+                            triggered=trigger, 
+                            trigger_slope=trig_slope,
+                            pre_trig_samples=pre_trigger_samples)
         return (values * 1000.0)
 
     def do_set_samples(self, samples):

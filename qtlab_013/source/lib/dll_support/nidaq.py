@@ -52,6 +52,7 @@ _config_map = {
 
 DAQmx_Val_Volts             = 10348
 DAQmx_Val_Rising            = 10280
+DAQmx_Val_Falling           = 10171
 DAQmx_Val_FiniteSamps       = 10178
 DAQmx_Val_GroupByChannel    = 0
 DAQmx_Val_GroupByScanNumber = 1
@@ -88,10 +89,18 @@ def buf_to_list(buf):
 
 def get_device_names():
     '''Return a list of available NIDAQ devices.'''
-
     bufsize = 1024
     buf = ctypes.create_string_buffer('\000' * bufsize)
     nidaq.DAQmxGetSysDevNames(ctypes.byref(buf), bufsize)
+    return buf_to_list(buf)[0]
+
+def get_device_type(dev):
+    '''Get the type of a DAQ device.'''
+    # int32 __CFUNC DAQmxGetDevProductType(const char device[], char *data,
+    # uInt32 bufferSize)
+    bufsize = 1024
+    buf = ctypes.create_string_buffer('\000' * bufsize)
+    nidaq.DAQmxGetDevProductType(dev, ctypes.byref(buf), bufsize) 
     return buf_to_list(buf)
 
 def reset_device(dev):
@@ -123,7 +132,10 @@ def get_physical_counter_channels(dev):
     return buf_to_list(buf)
 
 def read(devchan, samples=1, freq=10000.0, minv=-10.0, maxv=10.0,
-            timeout=10.0, config=DAQmx_Val_Cfg_Default, averaging=True, triggered = False):
+            timeout=10.0, config=DAQmx_Val_Cfg_Default, 
+            averaging=True, triggered = False,
+            trigger_slope='POS',
+            pre_trig_samples=0):
     '''
     Read up to max_samples from a channel. Seems to have trouble reading
     1 sample!
@@ -136,12 +148,13 @@ def read(devchan, samples=1, freq=10000.0, minv=-10.0, maxv=10.0,
         maxv (float): the maximum voltage
         timeout (float): the time in seconds to wait for completion
         config (string or int): the configuration of the channel
+        triggered (boolean): whether the measurement is triggered
+        trigger_slope (string): whether we are using the positive or negative
+                                slope for the trigger.
         
     Output:
         A numpy.array with the data on success, None on error
 
-    Gabriele added the averaging parameter, if it is false the output will be 
-    a list of all the read samples.
     '''
     timeout = timeout + samples/freq
 
@@ -176,7 +189,15 @@ def read(devchan, samples=1, freq=10000.0, minv=-10.0, maxv=10.0,
                 uInt64(samples)));
             
             if triggered:
-	        CHK(nidaq.DAQmxCfgDigEdgeRefTrig(taskHandle,"/Dev1/PFI0",DAQmx_Val_Rising,uInt32(100)));
+                if trigger_slope == 'POS':
+                    slope = DAQmx_Val_Rising
+                elif trigger_slope == 'NEG':
+                    slope = DAQmx_Val_Falling
+                else:
+                    raise ValueError('Use POS or NEG for the trigger slope')
+	        CHK(nidaq.DAQmxCfgDigEdgeRefTrig(taskHandle,
+                                "/Dev1/PFI0",slope,
+                                uInt32(pre_trig_samples)));
                 
             CHK(nidaq.DAQmxStartTask(taskHandle))
             CHK(nidaq.DAQmxReadAnalogF64(taskHandle, samples, float64(timeout),
@@ -251,7 +272,8 @@ def write(devchan, data, freq=10000.0, minv=-10.0, maxv=10.0,
                 ctypes.byref(written), None))
             CHK(nidaq.DAQmxStartTask(taskHandle))
     except Exception, e:
-        logging.error('NI DAQ call failed (correct channel configuration selected?): %s', str(e))
+        logging.error('NI DAQ call failed (correct channel configuration ' + 
+                        'selected?): %s', str(e))
     finally:
         if taskHandle.value != 0:
             nidaq.DAQmxStopTask(taskHandle)
