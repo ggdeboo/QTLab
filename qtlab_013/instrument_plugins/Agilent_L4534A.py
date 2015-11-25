@@ -31,7 +31,7 @@ class Agilent_L4534A(Instrument):
     '''
     def __init__(self, name, address):
         '''
-        Initializes the Rigol DS1000E.
+        Initializes the Agilent L4534A Digitizer.
 
         Input:
             name (string)    : name of the instrument
@@ -69,7 +69,7 @@ class Agilent_L4534A(Instrument):
                         'OR'    : 'or'}
             )
         self.add_parameter('arm_source',
-            flags=Instrument.FLAG_GET,
+            flags=Instrument.FLAG_GETSET,
             type=types.StringType,
             format_map={'IMM'   : 'immediate',
                         'SOFT'  : 'software',
@@ -137,16 +137,22 @@ class Agilent_L4534A(Instrument):
         self.add_parameter('sample_rate',
             flags=Instrument.FLAG_GETSET,
             type=types.IntType,
-            option_list=(100, 2000, 5000, 10000, 20000, 50000, 100000, 200000,
+            option_list=(1000, 2000, 5000, 10000, 20000, 50000, 100000, 200000,
                         500000, 1000000, 2000000, 5000000, 10000000, 20000000),
             units='Sa/s',
+            )
+        self.add_parameter('samples_per_record',
+            flags=Instrument.FLAG_GETSET,
+            type=types.IntType,
+            minval=1,
+            maxval=134205440, # extended memory option
             )
         self.add_parameter('pre_trigger_samples',
             flags=Instrument.FLAG_GET,  
             type=types.IntType,
             minval=0)
         self.add_parameter('trigger_delay',
-            flags=Instrument.FLAG_GET,
+            flags=Instrument.FLAG_GETSET,
             type=types.FloatType,
             minval=0.0, maxval=3600.0,
             units='s',
@@ -168,6 +174,7 @@ class Agilent_L4534A(Instrument):
         self.get_triggers_per_arm()
         self.get_records_per_acquisition()
         self.get_sample_rate()
+        self.get_samples_per_record()
         self.get_pre_trigger_samples()
         self.get_trigger_delay()
 
@@ -196,6 +203,18 @@ class Agilent_L4534A(Instrument):
         logging.debug(__name__ + ' : Setting the sample rate')
         self._visainstrument.write('CONF:ACQ:SRAT %.1e' % sample_rate)
 
+    def do_get_samples_per_record(self):
+        '''Get the number of samples per record'''
+        logging.debug(__name__ + ' : Getting the samples per record')
+        response = self._visainstrument.ask('CONF:ACQ:SCO?')
+        return int(response)
+
+    def do_set_samples_per_record(self, samples):
+        '''Set the number of samples per record'''
+        logging.debug(__name__ + ' : Setting the number of samples per ' +
+                        'to %i.' % samples)
+        self._visainstrument.write('CONF:ACQ:SCO %i' % samples) 
+
     def do_get_pre_trigger_samples(self):
         '''Get the number of pre-trigger samples per record'''
         response = self._visainstrument.ask('CONF:ACQ:SPR?')
@@ -209,6 +228,13 @@ class Agilent_L4534A(Instrument):
         response = self._visainstrument.ask('CONF:ACQ:TDEL?')
         return float(response)
 
+    def do_set_trigger_delay(self, delay):
+        '''
+            Set the time following a trigger event before the trigger sample
+            is acquired.
+        '''
+        self._visainstrument.write('CONF:ACQ:TDEL %e' % delay)
+
     def do_get_trigger_source(self):
         '''Get the trigger source.'''
         logging.debug(__name__ + ' : Get the trigger source')
@@ -220,6 +246,10 @@ class Agilent_L4534A(Instrument):
         logging.debug(__name__ + ' : Get the arm source')
         response = self._visainstrument.ask('CONF:ARM:SOUR?')
         return response.split(',')[0]
+
+    def do_set_arm_source(self, source):
+        '''Set the arm source.'''
+        self._visainstrument.write('CONF:ARM:SOUR %s' % source)
 
     def do_get_triggers_per_arm(self):
         '''Get the number of triggers per arm. Default 1024'''
@@ -322,7 +352,6 @@ class Agilent_L4534A(Instrument):
         # check whether data is available
         if self._visainstrument.ask('STAT:OPER:COND? MTHR') == '+1':
             preamble = self._visainstrument.ask('FETC:WAV:ACQ:PRE?').split(',')
-            print(preamble)
             n_samples = int(preamble[1])
             data_array = zeros(n_samples, dtype=float32)
             dig_range = self.get('ch%i_range' % channel)
