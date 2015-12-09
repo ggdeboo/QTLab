@@ -27,6 +27,12 @@ import re
 
 import qt
 
+function_unit = { 'VOLT'    : 'V',
+                  'CURR'    : 'A',
+                  'RES'     : 'Ohm',
+                  'FRES'    : 'Ohm',
+                }
+
 def bool_to_str(val):
     '''
     Function to convert boolean to 'ON' or 'OFF'
@@ -74,19 +80,34 @@ class HP_34401A(Instrument):
         self.__name__ = name
         self._address = address
         self._visainstrument = visa.instrument(self._address)
+        self._visainstrument.timeout = 0.5
         if self._visainstrument.interface_type == 4: # serial?
             self._visainstrument.term_chars = '\n'
             self._visainstrument.write('SYST:REMOTE')
-        self._modes = ['VOLT:AC', 'VOLT', 'CURR:AC', 'CURR', 'RES',
-            'FRES', 'TEMP', 'FREQ']
+        self._modes = ['VOLT', 
+                       'VOLT:AC', 
+                       'CURR',
+                       'CURR:AC',
+                       'RES',
+                       'FRES', 
+                       'FREQ',
+                       'PER',
+                       'CONT',
+                       'DIOD',
+                      ]
         self._change_display = change_display
         self._change_autozero = change_autozero
-        self._trigger_sent = False
+
+        self._trigger_count = 0
+        self._triggers_sent = 0
+        self._wait_for_trigger = False
 
         # Add parameters to wrapper
         self.add_parameter('range',
             flags=Instrument.FLAG_GETSET,
             units='', minval=0.01, maxval=100, type=types.FloatType)
+
+        # trigger section
         self.add_parameter('trigger_count',
             flags=Instrument.FLAG_GETSET,
             units='#', type=types.IntType)
@@ -95,10 +116,32 @@ class HP_34401A(Instrument):
             units='s', minval=0, maxval=3600, type=types.FloatType)
         self.add_parameter('trigger_source',
             flags=Instrument.FLAG_GETSET,
-            units='')
+            type=types.StringType,
+            format_map = { 'BUS' : 'bus',
+                           'IMM' : 'immediate',
+                           'EXT' : 'external'}
+            )
+        self.add_parameter('sample_count',
+            flags=Instrument.FLAG_GETSET,
+            units='#', type=types.IntType,
+            minval=1, maxval=50000)
+    
         self.add_parameter('mode',
             flags=Instrument.FLAG_GETSET,
-            type=types.StringType, units='')
+            type=types.StringType,
+            format_map = { 
+                            'VOLT'   : 'voltage DC',
+                            'VOLT:AC'   : 'voltage AC',
+                            'CURR'   : 'current DC',
+                            'CURR:AC'   : 'current AC',
+                            'RES'       : 'resistance',
+                            'FRES'      : 'resistance 4 wire mode',
+                            'FREQ'      : 'frequency',
+                            'PER'       : 'period',
+                            'CONT'      : 'continuity',
+                            'DIOD'      : 'diode'
+                        }
+            )
         self.add_parameter('resolution',
             flags=Instrument.FLAG_GETSET,
             units='', minval = 3e-7, maxval=1e-4, type=types.FloatType)                  
@@ -115,11 +158,16 @@ class HP_34401A(Instrument):
             type=types.BooleanType)
         self.add_parameter('autorange',
             flags=Instrument.FLAG_GETSET,
-            units='',
             type=types.BooleanType)
         self.add_parameter('last_error_message',
                 type=types.StringType,
                 flags=Instrument.FLAG_GET)
+        self.add_parameter('terminals',
+            type=types.StringType,
+            flags=Instrument.FLAG_GET,
+            option_list=(
+                'FRONT',
+                'REAR'))
 
         # Add functions to wrapper
         self.add_function('set_mode_volt_ac')
@@ -135,6 +183,7 @@ class HP_34401A(Instrument):
 
         self.add_function('read')
 
+        self.add_function('send_init')
         self.add_function('send_trigger')
         self.add_function('fetch')
 
@@ -195,20 +244,15 @@ class HP_34401A(Instrument):
         self.get_mode()
         self.get_range()
         self.get_trigger_count()
+        self.get_sample_count()
         self.get_trigger_delay()
         self.get_trigger_source()
         self.get_nplc()
         self.get_display()
         self.get_autozero()
         self.get_autorange()
-
-# Link old read and readlast to new routines:
-    # Parameters are for states of the machnine and functions
-    # for non-states. In principle the reading of the Keithley is not
-    # a state (it's just a value at a point in time) so it should be a
-    # function, technically. The GUI, however, requires an parameter to
-    # read it out properly, so the reading is now done as if it is a
-    # parameter, and the old functions are redirected.
+        self.get_terminals()
+        self.get_last_error_message()
 
     def read(self): 
         '''
@@ -217,31 +261,41 @@ class HP_34401A(Instrument):
         logging.debug('Link to get_readval()')
         return self.get_readval()
 
-
-    def send_trigger(self): #needs debugging
+    def send_init(self):
         '''
-        Send trigger to HP, use when triggering is not continous.
+        Send init to HP, use when triggering is not continous.
         '''
         self._visainstrument.write('INIT')
-        self._trigger_sent = True
+        self._wait_for_trigger = True
+        self._triggers_sent = 0
+        qt.msleep(0.020) # instrument needs 20 ms to set up
 
-
-    def fetch(self): #needs debugging
+    def send_trigger(self):
+        '''Send a trigger to the multimeter
         '''
-        Get data at this instance, not recommended, use get_readlastval.
+        self._visainstrument.write('*TRG')
+        self._triggers_sent += 1
+
+    def fetch(self):
+        '''Transfer readings stored in the multimeter's internal memory
+        
         Use send_trigger() to trigger the device.
         Note that Readval is not updated since this triggers itself.
         '''
-        trigger_status = False
-        if self._trigger_sent and (not trigger_status):
-            logging.debug('Fetching data')
+        if self._triggers_sent > 0:
             reply = self._visainstrument.ask('FETCH?')
-            self._trigger_sent = False
-            return float(reply[0:15])
-        elif (not self._trigger_sent) and (not trigger_status):
-            logging.warning('No trigger sent, use send_trigger')
+            if self._triggers_sent >= self._trigger_count:
+                self._wait_for_trigger = False
         else:
-            logging.error('Triggering is on continous!')
+            data_points = int(self._visainstrument.ask('DATA:POIN?'))
+            if data_points == 0:
+                # No triggers have been sent and there is no data in the buffer
+                logging.warning('No triggers have been sent yet and buffer' + 
+                                ' is empty.')
+            else:
+                # No triggers have been sent, but the buffer is not empty
+                reply = self._visainstrument.ask('FETCH?')
+        return float(reply[0:15])
 
     def set_mode_volt_ac(self): 
         '''
@@ -351,8 +405,6 @@ class HP_34401A(Instrument):
         '''
         Aborts current trigger and sends a new trigger
         to the device and reads float value.
-        Do not use when trigger mode is 'CONT'
-        Instead use readlastval
 
         Input:
             ignore_error (boolean): Ignore trigger errors, default is 'False'
@@ -363,7 +415,7 @@ class HP_34401A(Instrument):
 
         logging.debug('Read current value')
         text = self._visainstrument.ask('READ?')
-        self._trigger_sent = False
+        self._trigger_count = 0
         text = re.sub('N.*','',text)
             
         return float(text)
@@ -490,9 +542,11 @@ class HP_34401A(Instrument):
             None
         '''
         logging.debug('Set trigger count to %s' % val)
+        self._trigger_count = val
         if val > 9999:
-            val = 'INF'
-        self._set_func_par_value('TRIG', 'COUN', val)
+            self._visainstrument.write('TRIG:COUNT INF')
+        else:
+            self._visainstrument.write('TRIG:COUNT %i' % val)
 
     def do_get_trigger_count(self):
         '''
@@ -505,13 +559,30 @@ class HP_34401A(Instrument):
             count (int) : Trigger count
         '''
         logging.debug('Read trigger count from instrument')
-        ans = self._get_func_par('TRIG', 'COUN')
+        ans = self._visainstrument.ask('TRIG:COUN?')
         try:
             ret = int(float(ans))
         except:
             ret = 0
-
+        self._trigger_count = ret
         return ret
+
+    def do_get_sample_count(self):
+        '''Get the samples taken per trigger
+
+        Input:
+            None
+    
+        Output:
+            sample_count (int) : sample count
+        '''
+        logging.debug(self.__name__ + 'Read the sample count from instrument')
+        ans = self._visainstrument.ask('SAMP:COUN?')
+        return int(ans)
+
+    def do_set_sample_count(self, val):
+        logging.debug(self.__name__ + 'Setting sample count to %i' % val)
+        self._visainstrument.write('SAMP:COUNT %i' % val)
 
     def do_set_trigger_delay(self, val):
         '''
@@ -546,7 +617,7 @@ class HP_34401A(Instrument):
         Input:
             val (string) : Trigger source
 
-        Output:6½ digit
+        Output:
             None
         '''
         logging.debug('Set Trigger source to %s' % val)
@@ -586,6 +657,8 @@ class HP_34401A(Instrument):
                 self._change_units('A')
             elif mode.startswith('RES'):
                 self._change_units('Ohm')
+            elif mode.startswith('FRES'):
+                self._change_units('Ohm')
             elif mode.startswith('FREQ'):
                 self._change_units('Hz')
 
@@ -613,7 +686,7 @@ class HP_34401A(Instrument):
 
     def do_get_display(self):
         '''
-        Read the staturs of diplay
+        Read the status of diplay
 
         Input:
             None
@@ -622,7 +695,7 @@ class HP_34401A(Instrument):
             True = On
             False= Off
         '''
-        logging.debug('Reading display from instrument')
+        logging.debug('Reading the status of the display from instrument')
         reply = self._visainstrument.ask('DISP?')
         return bool(int(reply))
 
@@ -657,10 +730,21 @@ class HP_34401A(Instrument):
 
     def do_set_autozero(self, val):
         '''
-        Switch the diplay on or off.
+        Switch the autozero on or off.
+        For front panel operation the autozero is set indirectly when you set
+        the resolution:
+            Resolution Choices      Integration Time    Autozero
+            Fast 4 Digit            0.02 PLC            Off
+          * Slow 4 Digit            1 PLC               On
+            Fast 5 Digit            0.2 PLC             Off
+          * Slow 5 Digit (default)  10 PLC              On
+          * Fast 6 Digit            10 PLC              On
+            Slow 6 Digit            100 PLC             On
+        * These setings configure the multimeter just as if you had
+          pressed the corresponding "DIGITS" keys from the front panel
 
         Input:
-            val (boolean) : True for display on and False for display off
+            val (boolean) : True for autozero on and False for autozero off
 
         Output
 
@@ -700,6 +784,31 @@ class HP_34401A(Instrument):
         reply = self._get_func_par(mode, 'RANG:AUTO')
         return bool(int(reply))
 
+    def do_get_terminals(self):
+        '''
+        Get terminals that are used.
+
+        Input:
+            None
+        Output:
+            'FRONT'
+            'REAR'
+        '''
+        logging.debug('Getting the terminal used by %s.' %self.get_name())
+        reply = self._visainstrument.ask(':ROUT:TERM?')
+        if reply == 'FRON': # The source meter responds with 'FRON'
+            logging.info('The terminal used by %s is FRONT.' %
+                            (self.get_name())) 
+            return 'FRONT'
+        elif reply == 'REAR':
+            logging.info('The terminal used by %s is %s.' %
+                            (self.get_name(),reply)) 
+            return reply
+        else:
+            logging.warning('Received unexpected response from %s.' %
+                            self.get_name())
+            raise Warning('Instrument %s responded with an unexpected ' + 
+                            'response: %s.' %(self.get_name(),reply))
 
 # --------------------------------------
 #           Internal Routines
@@ -707,7 +816,6 @@ class HP_34401A(Instrument):
 
     def _change_units(self, unit):
         self.set_parameter_options('readval', units=unit)
-    
         
     def _determine_mode(self, mode):
         '''
@@ -720,6 +828,10 @@ class HP_34401A(Instrument):
         if mode not in self._modes and mode not in ('INIT', 'TRIG', 'SYST', 'DISP'):
             logging.warning('Invalid mode %s, assuming current' % mode)
             mode = self.get_mode(query=False)   
+        if mode == 'CONT':
+            logging.warning('Multimeter is in continuity mode.')
+        if mode == 'DIOD':
+            logging.warning('Multimeter is in diode mode.')
         return mode
 
     def _set_func_par_value(self, mode, par, val):
