@@ -1,5 +1,6 @@
-# SR830.py, Stanford Research 830 DSP lock-in driver
+# SRS_SR830.py, Stanford Research 830 DSP lock-in driver
 # Katja Nowack, Stevan Nadj-Perge, Arjan Beukman, Reinier Heeres
+# Gabriele de Boo <ggdeboo@gmail.com>
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -21,7 +22,7 @@ import types
 import logging
 import time
 
-class SR830(Instrument):
+class SRS_SR830(Instrument):
     '''
     This is the python driver for the Lock-In SR830 from Stanford Research Systems.
 
@@ -54,7 +55,7 @@ class SR830(Instrument):
         self.add_parameter('frequency', type=types.FloatType,
             flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET,
             minval=1e-3, maxval=102e3,
-            units='Hz', format='%.04e')
+            units='Hz', format='%.04e',maxstep=1, stepdelay=5)
         self.add_parameter('phase', type=types.FloatType,
             flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET,
             minval=-360, maxval=729.99, units='deg')
@@ -63,8 +64,8 @@ class SR830(Instrument):
                            minval=1, maxval=19999)
         self.add_parameter('amplitude', type=types.FloatType,
             flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET,
-            minval=0.004, maxval=5.0,
-            units='V', format='%.04e')
+            minval=0.000, maxval=5.0,
+            units='V', format='%.04e',maxstep=.1, stepdelay=50)
         self.add_parameter('X', flags=Instrument.FLAG_GET, units='V', type=types.FloatType)
         self.add_parameter('Y', flags=Instrument.FLAG_GET, units='V', type=types.FloatType)
         self.add_parameter('R', flags=Instrument.FLAG_GET, units='V', type=types.FloatType)
@@ -93,9 +94,10 @@ class SR830(Instrument):
                 18 : "10ks",
                 19 : "30ks"
             })
-        self.add_parameter('out', type=types.FloatType, channels=(1,2,3,4),
+        self.add_parameter('aux_out', type=types.FloatType, channels=(1,2,3,4),
             flags=Instrument.FLAG_GETSET,
-            minval=-10.5, maxval=10.5, units='V', format='%.3f')
+            minval=-10.5, maxval=10.5, units='V', format='%.3f',
+	    maxstep=.1, stepdelay=50)
         self.add_parameter('in', type=types.FloatType, channels=(1,2,3,4),
             flags=Instrument.FLAG_GET,
             minval=-10.5, maxval=10.5, units='V', format='%.3f')
@@ -150,13 +152,18 @@ class SR830(Instrument):
                            format_map={False:'external', True:'internal'})
         self.add_parameter('ext_trigger', type=types.IntType,
                            flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET,
-                           format_map={0:'Sine', 1:'TTL rising edge', 2:'TTL falling edge'})
+                           format_map={0:'Sine', 
+                                       1:'TTL rising edge', 
+                                       2:'TTL falling edge'})
         self.add_parameter('sync_filter', type=types.BooleanType,
                            flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET,
                            format_map={False:'off', True:'on'})
         self.add_parameter('filter_slope', type=types.IntType,
                            flags=Instrument.FLAG_GETSET,
-                           format_map={0:'6dB/oct.', 1:'12dB/oct.', 2:'18dB/oct.', 3:'24dB/oct.'})
+                           format_map={0:'6dB/oct.', 
+                                       1:'12dB/oct.', 
+                                       2:'18dB/oct.', 
+                                       3:'24dB/oct.'})
         self.add_parameter('unlocked', type=types.BooleanType,
                            flags=Instrument.FLAG_GET,
                            format_map={False:'locked', True:'unlocked'})
@@ -169,9 +176,12 @@ class SR830(Instrument):
         self.add_parameter('output_overload', type=types.BooleanType,
                            flags=Instrument.FLAG_GET,
                            format_map={False:'normal', True:'overload'})
+        self.add_parameter('triggered_start', type=types.BooleanType,
+                           flags=Instrument.FLAG_GETSET)
 
         self.add_function('reset')
         self.add_function('get_all')
+        self.add_function('trigger')
 
         if reset:
             self.reset()
@@ -204,7 +214,7 @@ class SR830(Instrument):
         Output:
             None
         '''
-        logging.info(__name__ + ' : reading all settings from instrument')
+        logging.debug(__name__ + ' : reading all settings from instrument')
         self.get_sensitivity()
         self.get_tau()
         self.get_frequency()
@@ -228,6 +238,11 @@ class SR830(Instrument):
         self.get_input_overload()
         self.get_time_constant_overload()
         self.get_output_overload()
+        self.get_aux_out1()
+        self.get_aux_out2()
+        self.get_aux_out3()
+        self.get_aux_out4()
+        self.get_triggered_start()
 
     def disable_front_panel(self):
         '''
@@ -276,7 +291,7 @@ class SR830(Instrument):
         }
         self.direct_output()
         if parameters.__contains__(output):
-            logging.info(__name__ + ' : Reading parameter from instrument: %s ' %parameters.get(output))
+            #logging.info(__name__ + ' : Reading parameter from instrument: %s ' %parameters.get(output))
             if ovl:
                 self.get_input_overload()
                 self.get_time_constant_overload()
@@ -491,13 +506,13 @@ class SR830(Instrument):
         logging.debug(__name__ + ' : reading the input %i' %value)
         return float(self._visainstrument.ask('OAUX? %i' %value))
 
-    def do_set_out(self, value, channel):
+    def do_set_aux_out(self, value, channel):
         '''
         Set output voltage, rounded to nearest mV.
         '''
         self.set_aux(channel, value)
 
-    def do_get_out(self, channel):
+    def do_get_aux_out(self, channel):
         '''
         Read output voltage.
         '''
@@ -526,13 +541,17 @@ class SR830(Instrument):
 
     def do_get_ext_trigger(self):
         '''
-        Query trigger source for external reference: sine (0), TTL rising edge (1), TTL falling edge (2)
+        Query trigger source for external reference: sine (0), 
+                                                     TTL rising edge (1), 
+                                                     TTL falling edge (2)
         '''
         return int(self._visainstrument.ask('RSLP?'))
 
     def do_set_ext_trigger(self, value):
         '''
-        Set trigger source for external reference: sine (0), TTL rising edge (1), TTL falling edge (2)
+        Set trigger source for external reference: sine (0), 
+                                                   TTL rising edge (1), 
+                                                   TTL falling edge (2)
         '''
         self._visainstrument.write('RSLP '+ str(value))
 
@@ -679,9 +698,30 @@ class SR830(Instrument):
         '''
         Query if output (also main display) is in overload.
         Note: the status bit will be cleared after readout!
-        Set update to True for querying present overload, False for querying past events
+        Set update to True for querying present overload, False for querying 
+        past events
         '''
         if update:
-            self._visainstrument.ask('LIAS? 2')     #for realtime detection we clear the bit by reading it
-            time.sleep(0.02)                        #and wait for a little while so that it can be set again
+            self._visainstrument.ask('LIAS? 2') #for realtime detection we 
+            time.sleep(0.02)                    #clear the bit by reading it
+                                                #and wait for a little while 
+                                                #so that it can be set again
         return int(self._visainstrument.ask('LIAS? 2'))==1
+
+    def do_get_triggered_start(self):
+        '''Query whether the start of a measurement is triggered or not'''
+        logging.debug('Query the triggered start status')
+        response = self._visainstrument.ask('TSTR?')
+        return bool(int(response))
+
+    def do_set_triggered_start(self, value):
+        '''Set whether the start of a measurement is triggered or not'''
+        logging.debug('Setting the triggered_start parameter to %s' % value)
+        if value:
+            self._visainstrument.write('TSTR 1')
+        else:
+            self._visainstrument.write('TSTR 0')
+
+    def trigger(self):
+        '''Software trigger for triggered measurements'''
+        self._visainstrument.write('TRIG')
