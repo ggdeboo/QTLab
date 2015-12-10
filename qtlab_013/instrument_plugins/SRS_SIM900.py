@@ -34,6 +34,11 @@ class SRS_SIM900(Instrument):
     <name> = instruments.create('<name>', 'HP_34401A',
         address='<VISA address>',
         reset=<bool>,
+
+    Supported modules;
+        SIM928 : Isolated voltage source
+        SIM911 : BJT preamplifier
+        SIM965 : Bessel & Butterworth filter
     '''
 
     def __init__(self, name, address, reset=False,
@@ -59,7 +64,7 @@ class SRS_SIM900(Instrument):
 
         if self._visainstrument.interface_type == 4: # serial?
             self._visainstrument.term_chars = '\r\n'
-            self._visainstrument.baud_rate = 115200
+            self._visainstrument.baud_rate = 9600
         self._visainstrument.clear()
         cts = int(self._visainstrument.ask('CTCR?'))
 
@@ -67,6 +72,7 @@ class SRS_SIM900(Instrument):
         self.bad_ports = []
         self.SIM928_modules = [] # list of the ports of the SIM928 modules
         self.SIM911_modules = [] # list of the ports of the SIM911 modules
+        self.SIM965_modules = [] # list of the ports of the SIM965 modules
 
         for i in range(1,9):
             if bin(cts)[-(i+1)] == '1':
@@ -89,6 +95,7 @@ class SRS_SIM900(Instrument):
                                     'properly and will not be loaded.' % port)
                 self.bad_ports.append(port)
             else:
+                print idn
                 self.installed_modules.append((port, idn.split(',')[1]))
                 self.serial_numbers.append((port, idn.split(',')[2]))
 
@@ -139,10 +146,11 @@ class SRS_SIM900(Instrument):
             if module == 'SIM911':
                 self.SIM911_modules.append(port)
                 self.add_parameter('port%i_gain' % port,
-                                flags=Instrument.FLAG_GET,
+                                flags=Instrument.FLAG_GETSET,
                                 type=types.IntType,
                                 option_list=(1,2,5,10,20,50,100),
                                 get_func=self.SIM911_get_gain,
+                                set_func=self.SIM911_set_gain,
                                 channel=port,
                                 )
                 self.add_parameter('port%i_coupling' % port,
@@ -166,6 +174,50 @@ class SRS_SIM900(Instrument):
                                 get_func=self.SIM911_get_shield,
                                 channel=port,
                                 )
+            if module == 'SIM965':
+                self.SIM965_modules.append(port)
+                self.add_parameter('port{0}_filter_frequency'.format(port),
+                                flags=Instrument.FLAG_GETSET,
+                                type=types.FloatType,
+                                units='Hz',
+                                minval=1.0, maxval=5.00e5,
+                                get_func=self.SIM965_get_filter_frequency,
+                                set_func=self.SIM965_set_filter_frequency,
+                                channel=port,
+                                )
+                self.add_parameter('port{0}_filter_type'.format(port),
+                                flags=Instrument.FLAG_GETSET,
+                                type=types.StringType,
+                                option_list = ['butterworth', 'bessel'],
+                                get_func=self.SIM965_get_filter_type,
+                                set_func=self.SIM965_set_filter_type,
+                                channel=port,
+                                )
+                self.add_parameter('port{0}_filter_passband'.format(port),
+                                flags=Instrument.FLAG_GETSET,
+                                type=types.StringType,
+                                option_list = ['low pass', 'high pass'],
+                                get_func=self.SIM965_get_filter_passband,
+                                set_func=self.SIM965_set_filter_passband,
+                                channel=port,
+                                )
+                self.add_parameter('port{0}_filter_slope'.format(port),
+                                flags=Instrument.FLAG_GETSET,
+                                type=types.IntType,
+                                option_list = [12, 24, 36, 48],
+                                units='dB/octave',
+                                get_func=self.SIM965_get_filter_slope,
+                                set_func=self.SIM965_set_filter_slope,
+                                channel=port,
+                                )
+                self.add_parameter('port{0}_input_coupling'.format(port),
+                                flags=Instrument.FLAG_GET,
+                                type=types.StringType,
+                                option_list=('AC','DC'),
+                                get_func=self.SIM965_get_input_coupling,
+                                channel=port,
+                                )
+                            
         # Housekeeping parameters
         self.add_parameter('external_timebase',
                         flags=Instrument.FLAG_GET,
@@ -252,6 +304,12 @@ class SRS_SIM900(Instrument):
             self.get('port%i_coupling' % module)
             self.get('port%i_input' % module)
             self.get('port%i_shield' % module)
+        for module in self.SIM965_modules:
+            self.get('port{0}_filter_frequency'.format(module))
+            self.get('port{0}_filter_type'.format(module))
+            self.get('port{0}_filter_passband'.format(module))
+            self.get('port{0}_filter_slope'.format(module))
+            self.get('port{0}_input_coupling'.format(module))
 
     def _ask(self, message):
         '''
@@ -268,6 +326,8 @@ class SRS_SIM900(Instrument):
         else:
             logging.warning('SIM900 responded to %s with: %s' % 
                             (message, response))
+
+    # SIM928 isolated voltage source
 
     def SIM928_get_voltage(self, channel):
         self._visainstrument.write('FLSH %i' % channel)
@@ -343,6 +403,8 @@ class SRS_SIM900(Instrument):
         elif response == '8':
             return '[Battery Override]'
 
+    # SIM911 BJT preamplifier
+
     def SIM911_get_gain(self, channel):
         '''Get the gain of a SIM911 BJT Preamp module'''
         self._visainstrument.write('FLSH %i' % channel)
@@ -350,6 +412,11 @@ class SRS_SIM900(Instrument):
         qt.msleep(self.sleep_time)
         response = self._ask('GETN? %i,80' % channel)
         return int(response)
+
+    def SIM911_set_gain(self, gain, channel):
+        '''Set the gain of a SIM911 BJT Preamp module'''
+        self._visainstrument.write('FLSH %i' % channel)
+        self._visainstrument.write('SNDT %i, "GAIN %i"' % (channel,gain))
 
     def SIM911_get_coupling(self, channel):
         '''Get the input coupling of a SIM911 BJT Preamp module'''
@@ -385,6 +452,156 @@ class SRS_SIM900(Instrument):
             return 'FLOATING'
         if response == '2':
             return 'GROUNDED'
+
+    # SIM 965 Bessel & Butterworth filter
+
+    def SIM965_get_filter_frequency(self, channel):
+        '''Get the filter frequency of a SIM965 filter module'''
+        self._visainstrument.write('FLSH %i' % channel)
+        self._visainstrument.write('SNDT %i, "FREQ?"' % channel)
+        qt.msleep(self.sleep_time)
+        response = self._ask('GETN? %i,80' % channel)
+        return float(response)
+
+    def SIM965_set_filter_frequency(self, frequency, channel):
+        '''Set the filter frequency of a SIM965 filter module'''
+        self._visainstrument.write('FLSH %i' % channel)
+        self._visainstrument.write('SNDT {:d}, "FREQ {:.2E}"'.format(channel,
+                                                            frequency))
+
+    def SIM965_get_filter_type(self, channel):
+        '''Get the filter type of a SIM965 filter module
+
+        input:
+            None       
+ 
+        output:
+            butterworth or bessel
+        '''
+        self._visainstrument.write('FLSH {0}'.format(channel))
+        self._visainstrument.write('SNDT {0}, "TYPE?"'.format(channel))
+        qt.msleep(self.sleep_time)
+        response = self._ask('GETN? {0},80'.format(channel))
+        if response == '0':
+            return 'butterworth'
+        elif respone == '1':
+            return 'bessel'
+        else:
+            logging.warning('Filter type query returned invalid response: ' + 
+                            '{0}'.format(response))
+
+    def SIM965_set_filter_type(self, filter_type, channel):
+        '''Set the filter type of a SIM965 filter module
+
+        input:
+            butterworth or bessel
+ 
+        output:
+            None
+        '''
+        self._visainstrument.write('FLSH {0}'.format(channel))
+        if filter_type.upper() == 'BUTTERWORTH':
+            self._visainstrument.write(
+                'SNDT {0}, "TYPE {1}"'.format(channel, 'BUTTER'))
+        elif filter_type.upper() == 'BESSEL':
+            self._visainstrument.write(
+                'SNDT {0}, "TYPE {1}"'.format(channel, 'BESSEL'))
+        else:
+            raise ValueError(
+            'set_filter_type got an invalid input: {0}'.format(filter_type))
+
+    def SIM965_get_filter_passband(self, channel):
+        '''Get the filter passband of a SIM965 filter module
+
+        input:
+            None       
+ 
+        output:
+            'low pass' or 'high pass'
+        '''
+        self._visainstrument.write('FLSH {0}'.format(channel))
+        self._visainstrument.write('SNDT {0}, "PASS?"'.format(channel))
+        qt.msleep(self.sleep_time)
+        response = self._ask('GETN? {0},80'.format(channel))
+        if response == '0':
+            return 'low pass'
+        elif respone == '1':
+            return 'high pass'
+        else:
+            logging.warning('Filter passband query returned invalid response:' 
+                            + ' {0}'.format(response))
+
+    def SIM965_set_filter_passband(self, filter_passband, channel):
+        '''Set the filter pass band of a SIM965 filter module
+
+        input:
+            'low pass' or 'high pass'
+ 
+        output:
+            None
+        '''
+        self._visainstrument.write('FLSH {0}'.format(channel))
+        if filter_type.upper() == 'LOW PASS':
+            self._visainstrument.write(
+                'SNDT {0}, "PASS {1}"'.format(channel, 'LOWPASS'))
+        elif filter_type.upper() == 'HIGH PASS':
+            self._visainstrument.write(
+                'SNDT {0}, "TYPE {1}"'.format(channel, 'HIGHPASS'))
+        else:
+            raise ValueError(
+                'set_filter_passband got an invalid input:' +
+                ' {0}'.format(filter_passband))
+
+    def SIM965_get_filter_slope(self, channel):
+        '''Get the filter slope of a SIM965 filter module
+
+        input:
+            None       
+ 
+        output:
+            12, 24, 36, or 48
+        '''
+        self._visainstrument.write('FLSH {0}'.format(channel))
+        self._visainstrument.write('SNDT {0}, "SLPE?"'.format(channel))
+        qt.msleep(self.sleep_time)
+        response = self._ask('GETN? {0},80'.format(channel))
+        return int(response)
+
+    def SIM965_set_filter_slope(self, filter_slope, channel):
+        '''Set the filter slope of a SIM965 filter module
+
+        input:
+            12, 24, 36, or 48
+ 
+        output:
+            None       
+        '''
+        self._visainstrument.write('FLSH {0}'.format(channel))
+        self._visainstrument.write(
+            'SNDT {0}, "SLPE {1}"'.format(channel, filter_slope))
+
+    def SIM965_get_input_coupling(self, channel):
+        '''Get the input coupling of a SIM965 filter module
+
+        input:
+            None       
+ 
+        output:
+            'DC' or 'AC'
+        '''
+        self._visainstrument.write('FLSH {0}'.format(channel))
+        self._visainstrument.write('SNDT {0}, "COUP?"'.format(channel))
+        qt.msleep(self.sleep_time)
+        response = self._ask('GETN? {0},80'.format(channel))
+        if response == '0':
+            return 'DC'
+        elif response =='1':
+            return 'AC'
+        else:
+            logging.warning('Filter coupling query returned invalid response:' 
+                            + ' {0}'.format(response))
+
+    # internal functions
 
     def do_get_external_timebase(self):
         '''Query whether an external timbease input is detected'''
