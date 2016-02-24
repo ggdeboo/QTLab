@@ -195,7 +195,7 @@ class HDF5Data:
         name = data.Data._data_list.new_item_name(self, name)
         self._name = name
 
-        filepath = kwargs.get('filepath, None')
+        filepath = kwargs.get('filepath', None)
         if filepath:
             self._filepath = filepath
 
