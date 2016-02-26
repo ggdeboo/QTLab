@@ -188,6 +188,11 @@ class LeCroy_Wavesurfer(Instrument):
             type=types.StringType,
             option_list=('POS','NEG')
             )
+        self.add_parameter('trigger_delay',
+            flags=Instrument.FLAG_GETSET,
+            type=types.FloatType,
+            minval=-500,
+            units='s')
 
         # Math functions
         self.add_parameter('math_function',
@@ -230,8 +235,9 @@ class LeCroy_Wavesurfer(Instrument):
         self.get_trigger_source()
         self.get_trigger_type()
         self.get_trigger_mode()
-        #self.get_trigger_level()
+        self.get_trigger_level()
         self.get_trigger_slope()
+        self.get_trigger_delay()
 #            self.get_enhanced_resolution(ch_in)
 
 #    def do_get_enhanced_resolution(self, channel):
@@ -750,6 +756,19 @@ class LeCroy_Wavesurfer(Instrument):
         '''
         trigger_channel = self.get_trigger_source()
         self._visainstrument.write('%s:TRSL %s' % (trigger_channel, slope))
+
+    def do_get_trigger_delay(self):
+        '''
+        Get the trigger delay (timebase delay)
+        '''
+        response = self._visainstrument.ask('TRDL?')
+        return float(response.lstrip('TRDL').rstrip('S'))
+
+    def do_set_trigger_delay(self, delay):
+        '''
+        Set the trigger delay in s
+        '''
+        self._visainstrument.write('TRDL %.3e S' % delay)
 
     def arm_acquisition(self):
         '''
