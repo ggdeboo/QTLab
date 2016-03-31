@@ -21,7 +21,7 @@ import visa
 import types
 import logging
 #from time import sleep
-from numpy import arange
+from numpy import arange, float32
 from math import log10
 #from struct import *
 
@@ -71,6 +71,7 @@ class Keysight_33500B(Instrument):
         else:
             self._mem_size = 1e6
             logging.debug('Extended memory option not installed')
+        self._visainstrument.write('FORM:BORD SWAP') # correct byte order
         
         # Output
         self.add_parameter('output', 
@@ -110,7 +111,7 @@ class Keysight_33500B(Instrument):
             units='V')
         self.add_parameter('load',
             type=types.FloatType,
-            flags=Instrument.FLAG_GET,
+            flags=Instrument.FLAG_GETSET,
             channels=(1, 2),
             channel_prefix='ch%i_',
             minval=1.0, maxval=10000,
@@ -229,6 +230,8 @@ class Keysight_33500B(Instrument):
         self.add_parameter('free_volatile_memory',
             type=types.IntType,
             flags=Instrument.FLAG_GET,
+            channels=(1, 2), 
+            channel_prefix='ch%i_',
             )
 
         # display
@@ -267,14 +270,14 @@ class Keysight_33500B(Instrument):
             )
         self.add_parameter('arbitrary_waveform_samplerate',
             type=types.IntType,
-            flags=Instrument.FLAG_GET,
+            flags=Instrument.FLAG_GETSET,
             channels=(1, 2),
             channel_prefix='ch%i_',
             maxval=62500000,
             )
         self.add_parameter('arbitrary_waveform_filter',
             type=types.StringType,
-            flags=Instrument.FLAG_GET,
+            flags=Instrument.FLAG_GETSET,
             channels=(1, 2),
             channel_prefix='ch%i_',
             option_list=('NORMAL','STEP','OFF'),
@@ -296,6 +299,7 @@ class Keysight_33500B(Instrument):
         self.add_function('send_trigger')
         self.add_function('initiate')
         self.add_function('get_volatile_memory_catalog')
+        self.add_function('synchronize_waveforms')
 
         self.add_function('reset')
         self.add_function('get_all')
@@ -325,7 +329,7 @@ class Keysight_33500B(Instrument):
             self.get('ch{0}_arbitrary_waveform_samplerate'.format(channel))
             self.get('ch{0}_arbitrary_waveform_filter'.format(channel))
             self.get('ch{0}_arbitrary_waveform_peak_to_peak'.format(channel))
-        self.get_free_volatile_memory()
+            self.get('ch{0}_free_volatile_memory'.format(channel))
         self.get_display()
         self.get_sync_source()
 
@@ -586,13 +590,18 @@ class Keysight_33500B(Instrument):
         load = self._visainstrument.ask( 'OUTP{0}:LOAD?'.format(channel))
         return float(load)
 
-    def do_get_free_volatile_memory(self):
-        logging.debug(__name__ + ' : Getting free volatile memory')
-        return int(self._visainstrument.ask('DATA:VOL:FREE?'))
+    def do_set_load(self, load, channel):
+        self._visainstrument.write('OUTP{0}:LOAD {1:.1f}'.format(channel, load)) 
 
-    def get_volatile_memory_catalog(self):
+    def do_get_free_volatile_memory(self, channel):
+        logging.debug(__name__ + ' : Getting free volatile memory')
+        return int(self._visainstrument.ask(
+                    'SOUR{0}:DATA:VOL:FREE?'.format(channel)))
+
+    def get_volatile_memory_catalog(self, channel):
         logging.debug(__name__ + ' : Getting volatile memory catalog')
-        catalog = self._visainstrument.ask('DATA:VOL:CAT?')
+        catalog = self._visainstrument.ask(
+            'SOUR{0}:DATA:VOL:CAT?'.format(channel))
         return catalog.replace('"','').split(',')
 
     def do_get_display(self):
@@ -633,6 +642,11 @@ class Keysight_33500B(Instrument):
             'SOUR{0}:FUNC:ARB:SRAT?'.format(channel))
         return int(float(sample_rate))
 
+    def do_set_arbitrary_waveform_samplerate(self, samplerate, channel):
+        '''Set the sample rate for the selected arbitrary waveform'''
+        self._visainstrument.write(
+                'SOUR{0}:FUNC:ARB:SRAT {1:.12e}'.format(channel, samplerate))
+
     def do_get_arbitrary_waveform_filter(self, channel):
         '''Get the filter setting for the arbitrary waveform
 
@@ -645,6 +659,17 @@ class Keysight_33500B(Instrument):
             'SOUR{0}:FUNC:ARB:FILT?'.format(channel))
         return filter.upper()
 
+    def do_set_arbitrary_waveform_filter(self, filter, channel):
+        '''Set the filter setting for the arbitrary waveform
+
+            Options:
+                NORMAL: flattest frequency response
+                STEP:   smoothing, minimizing preshoot and overshoot
+                OFF:    step from point to point at the sample rate (no smoothing)
+        '''
+        self._visainstrument.write(
+            'SOUR{0}:FUNC:ARB:FILT {1}'.format(channel, filter.upper()))
+
     def do_get_arbitrary_waveform_peak_to_peak(self, channel):
         ptp = self._visainstrument.ask(
             'SOUR{0}:FUNC:ARB:PTP?'.format(channel))
@@ -653,25 +678,53 @@ class Keysight_33500B(Instrument):
     def write_arbitrary_waveform(self, waveform, name, channel):
         '''Takes a 1d numpy array and writes it to the volatile memory of the 
             waveform generator'''
+        src = 'SOUR{0}:'.format(channel)
+        if name.upper() in self.get_volatile_memory_catalog(channel): 
+            self._visainstrument.write(src + 'DATA:VOL:CLE')
+
+        header_length = 6
         if len(name) > 12:
             raise ValueError('Waveform name can not be longer than 12 characters')
         if len(waveform) < 8:
             raise ValueError('Waveform length has to be larger than 8')
 
         if waveform.dtype == 'float64':
+#            if len(waveform) > 65536:
+#                raise ValueError('Waveform length can not be longer than ' + 
+#                                '65,536 when using floating point numbers.')
             if waveform.min() < -1.0:
                 raise ValueError('Waveform values can not be smaller than -1.0')
             if waveform.max() > 1.0:
                 raise ValueError('Waveform values can not be larger than 1.0')
-            value_string = ', '.join(['%.5f' % num for num in waveform])
-        elif waveform.dtype == 'int32':
-            value_string = ', '.join(['%i' % num for num in waveform])
+            # make a concatenated string of values
+#            value_string = ', '.join(['%.5f' % num for num in waveform])
+            value_string = ('#4{0:d}'.format(len(waveform)*4) + 
+                                float32(waveform).tostring().encode('hex'))
+            message = src + 'DATA:ARB {0:s}, {1:s}'.format(name, value_string)
+            print message
+            self._visainstrument.write(message)
 
-        if name.upper() in self.get_volatile_memory_catalog(): 
-            self._visainstrument.write('DATA:VOL:CLE')
+        elif waveform.dtype == 'int16':
+            # make a binary block
+            #value_string = ', '.join(['%i' % num for num in waveform])
+            value_string = ('#{0:d}{1:06d}'.format(header_length, len(waveform)*2) + 
+                                waveform.tostring())
+            message = src + 'DATA:ARB:DAC {0}, {1}'.format(name, value_string)
+            self._visainstrument.write_raw(message + '\n')
+        elif waveform.dtype == 'float32':
+            if waveform.min() < -1.0:
+                raise ValueError('Waveform values can not be smaller than -1.0')
+            if waveform.max() > 1.0:
+                raise ValueError('Waveform values can not be larger than 1.0')
+            value_string = ('#{0:d}{1:06d}'.format(header_length, len(waveform)*4) +
+                                waveform.tostring())
+            message = src + 'DATA:ARB {0}, {1}'.format(name, value_string)
+#            print message
+            self._visainstrument.write_raw(message + '\n')
 
-        self._visainstrument.write('DATA:ARB{0} {1:s}, {2:s}'.format(
-            channel, name, value_string))
-        self.get_free_volatile_memory()
+        self.get('ch{0}_free_volatile_memory'.format(channel))
+
+    def synchronize_waveforms(self):
+        self._visainstrument.write('FUNC:ARB:SYNC')
             
 
