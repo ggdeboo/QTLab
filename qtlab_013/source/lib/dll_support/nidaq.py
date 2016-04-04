@@ -1,5 +1,6 @@
 # nidaq.py, python wrapper for NIDAQ DLL
 # Reinier Heeres <reinier@heeres.eu>, 2008
+# Gabriele de Boo <ggdeboo@gmail.com>, 2015
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -101,7 +102,62 @@ def get_device_type(dev):
     bufsize = 1024
     buf = ctypes.create_string_buffer('\000' * bufsize)
     nidaq.DAQmxGetDevProductType(dev, ctypes.byref(buf), bufsize) 
-    return buf_to_list(buf)
+    return buf_to_list(buf)[0]
+
+def get_input_voltage_ranges(dev):
+    '''Get the available voltage ranges for the AI connected DAQ.'''
+    bufsize = 32
+    range_list_type = float64 * bufsize
+    range_list = range_list_type()
+    nidaq.DAQmxGetDevAIVoltageRngs(dev, ctypes.byref(range_list), uInt32(bufsize))
+    range_list = list(range_list)
+    range_values_n = range_list.index(0.0)
+    range_n = range_values_n / 2
+    return_list = []
+    for idx in range(range_n):
+        return_list.append([range_list[2*idx],
+                            range_list[(2*idx)+1]])        
+    return return_list
+
+def get_output_voltage_ranges(dev):
+    '''Get the available voltage ranges for the AO connected DAQ.'''
+    bufsize = 32
+    range_list_type = float64 * bufsize
+    range_list = range_list_type()
+    nidaq.DAQmxGetDevAOVoltageRngs(dev, ctypes.byref(range_list), uInt32(bufsize))
+    range_list = list(range_list)
+    range_values_n = range_list.index(0.0)
+    range_n = range_values_n / 2
+    return_list = []
+    for idx in range(range_n):
+        return_list.append([range_list[2*idx],
+                            range_list[(2*idx)+1]])        
+    return return_list
+
+def get_maximum_input_channel_rate(dev):
+    '''Get the highest sample rate for a single input channel'''
+    sample_rate = float64()
+    nidaq.DAQmxGetDevAIMaxSingleChanRate(dev, ctypes.byref(sample_rate))
+    return sample_rate.value    
+
+def get_minimum_input_channel_rate(dev):
+    '''Get the minimum sample rate an input channel'''
+    sample_rate = float64()
+    nidaq.DAQmxGetDevAIMinRate(dev, ctypes.byref(sample_rate))
+    return sample_rate.value    
+
+def get_maximum_output_channel_rate(dev):
+    '''Get the maximum update rate for an output channel'''
+    sample_rate = float64()
+    nidaq.DAQmxGetDevAOMaxRate(dev, ctypes.byref(sample_rate))
+    return sample_rate.value
+
+def get_simultaneous_sampling_support(dev):
+    '''Get whether simultaneous sampling is supported'''
+    sim_sampling = ctypes.c_bool()
+    nidaq.DAQmxGetDevAISimultaneousSamplingSupported(dev,
+                                                ctypes.byref(sim_sampling))
+    return sim_sampling.value
 
 def reset_device(dev):
     '''Reset device "dev"'''
@@ -236,7 +292,8 @@ def write(devchan, data, freq=10000.0, minv=-10.0, maxv=10.0,
     Input:
         devchan (string): device/channel specifier, such as Dev1/ao0
         data (int/float/numpy.array): data to write
-        freq (float): the the minimum voltage
+        freq (float): the update rate
+        minv (float): the maximum voltage
         maxv (float): the maximum voltage
         timeout (float): the time in seconds to wait for completion
 

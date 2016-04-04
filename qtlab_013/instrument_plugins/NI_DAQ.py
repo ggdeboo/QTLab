@@ -51,7 +51,26 @@ class NI_DAQ(Instrument):
         Instrument.__init__(self, name, tags=['physical'])
 
         self._id = id
+        self.ai_range_list = nidaq.get_input_voltage_ranges(id)
+        self.ao_range_list = nidaq.get_output_voltage_ranges(id)
+        self.ai_max_rate = nidaq.get_maximum_input_channel_rate(id)
+        self.ai_min_rate = nidaq.get_minimum_input_channel_rate(id)
+        self.ao_max_rate = nidaq.get_maximum_output_channel_rate(id)
         logging.info('NI daq device type: %s' % nidaq.get_device_type(id))
+        logging.info('Voltage ranges on the inputs: ' +
+                        str(self.ai_range_list))
+        logging.info('Voltage ranges on the outputs: ' +
+                        str(self.ao_range_list))
+        logging.info('Minimum single channel rate for analog inputs: %.1f kS/s' %
+                        (self.ai_min_rate/1000))
+        logging.info('Maximum single channel rate for analog inputs: %.1f kS/s' %
+                        (self.ai_max_rate/1000))
+        logging.info('Maximum channel rate for analog output: %.1f kS/s' %
+                        (self.ao_max_rate/1000))
+        if nidaq.get_simultaneous_sampling_support(id):
+            logging.info('This DAQ supports simultaneous sampling.')
+        else:
+            logging.info('This DAQ does not support simultaneous sampling.')
 
         self.add_parameter('chan_config',
             flags=Instrument.FLAG_SET|Instrument.FLAG_SOFTGET,
@@ -109,12 +128,15 @@ class NI_DAQ(Instrument):
         self.add_parameter('samples',
             flags=Instrument.FLAG_SET|Instrument.FLAG_SOFTGET,
             type=types.IntType,
-            units='#')
+            units='#',
+            )
         #Added by Jan
         self.add_parameter('freq',
             flags=Instrument.FLAG_SET|Instrument.FLAG_SOFTGET,
             type=types.FloatType,
-            units='#/s')         
+            units='#/s',
+            minval=self.ai_min_rate,maxval=self.ai_max_rate,
+            )         
 
         self.add_function('reset')
 
@@ -192,6 +214,7 @@ class NI_DAQ(Instrument):
         return (values * 1000.0)
 
     def do_set_samples(self, samples):
+        '''Set the number of samples taken in a single acquisition.'''
         #Added by Jan
         self._samples = samples
 
