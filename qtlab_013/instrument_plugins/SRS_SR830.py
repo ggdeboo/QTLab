@@ -21,6 +21,8 @@ import visa
 import types
 import logging
 import time
+from numpy import array, float64
+import struct
 
 class SRS_SR830(Instrument):
     '''
@@ -178,6 +180,30 @@ class SRS_SR830(Instrument):
                            format_map={False:'normal', True:'overload'})
         self.add_parameter('triggered_start', type=types.BooleanType,
                            flags=Instrument.FLAG_GETSET)
+        # data storage
+        self.add_parameter('sample_rate', type=types.IntType,
+                            flags=Instrument.FLAG_GETSET,
+                            format_map={0:'62.5 mHz',
+                                        1:'125 mHz',
+                                        2:'250 mHz',
+                                        3:'500 mHz',
+                                        4:'1 Hz',
+                                        5:'2 Hz',
+                                        6:'4 Hz',
+                                        7:'8 Hz',
+                                        8:'16 Hz',
+                                        9:'32 Hz',
+                                       10:'64 Hz', 
+                                       11:'128 Hz', 
+                                       12:'256 Hz', 
+                                       13:'512 Hz', 
+                                       14:'Trigger'} 
+                            )
+        self.add_parameter('buffer_mode', type=types.StringType,
+                            flags=Instrument.FLAG_GETSET,
+                            format_map={0:'Shot',
+                                        1:'Loop'}
+                            )
 
         self.add_function('reset')
         self.add_function('get_all')
@@ -243,6 +269,8 @@ class SRS_SR830(Instrument):
         self.get_aux_out3()
         self.get_aux_out4()
         self.get_triggered_start()
+        self.get_sample_rate()
+        self.get_buffer_mode()
 
     def disable_front_panel(self):
         '''
@@ -725,3 +753,65 @@ class SRS_SR830(Instrument):
     def trigger(self):
         '''Software trigger for triggered measurements'''
         self._visainstrument.write('TRIG')
+
+    def do_get_sample_rate(self):
+        '''Get the sample rate for the data storage'''
+        response = self._visainstrument.ask('SRAT?')
+        return int(response)
+
+    def do_set_sample_rate(self, value):
+        '''Set the sample rate for the data storage'''
+        self._visainstrument.write('SRAT {0}'.format(value))
+
+    def do_get_buffer_mode(self):
+        return int(self._visainstrument.ask('SEND?'))
+
+    def do_set_buffer_mode(self, value):
+        self._visainstrument.write('SEND {0:d}'.format(value))
+
+    def start_data_storage(self):
+        logging.debug(__name__ + 'Starting data storage')
+        self._visainstrument.write('STRT')
+
+    def pause_data_storage(self):
+        logging.debug(__name__ + 'Pausing data storage')
+        self._visainstrument.write('PAUS')
+        
+    def reset_data_storage(self):
+        logging.debug(__name__ + 'Resetting data storage')
+        self._visainstrument.write('REST')
+
+    def get_points_stored(self):
+        return int(self._visainstrument.ask('SPTS?'))
+
+    def get_channel_buffer(self, channel, samples=1, most_recent=True):
+        '''Get the contents of the buffer on a channel
+
+        The SR830 can store up to 16383 points from both the channel 1
+        and channel 2 displays in an internal data buffer.
+        '''
+        self.pause_data_storage()
+        N_samples = self.get_points_stored()
+        if most_recent:
+            bin_start = N_samples - samples
+        else:
+            bin_start = 0
+
+        if N_samples < samples:
+            logging.error(
+                'There are too few data points in the buffer ' + 
+                    '({0})'.format(N_samples))
+        else:
+            bin_end = bin_start + samples
+#            buffer_contents = self._visainstrument.ask(
+#                'TRCA ? {0}, {1}, {2}'.format(channel, bin_start, bin_end))
+#        return array(buffer_contents.rstrip(',').split(','), dtype=float64)
+            self._visainstrument.write(
+                'TRCB ? {0}, {1}, {2}'.format(channel, bin_start, samples))
+            buffer_contents = self._visainstrument.read_raw()
+            values = array(struct.unpack('{0}f'.format(samples), 
+                            buffer_contents)
+                            )
+            return values
+
+
