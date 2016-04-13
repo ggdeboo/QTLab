@@ -254,6 +254,15 @@ class HP_34401A(Instrument):
         self.get_terminals()
         self.get_last_error_message()
 
+    def set_to_remote(self):
+        '''
+        Set the instrument to remote mode for RS-232 operation
+        '''        
+        if self._visainstrument.interface_type == 4: # serial?
+            self._visainstrument.write('SYST:REM')
+        else:
+            logging.error('This function only applies to RS-232 operation.')
+
     def read(self): 
         '''
         Old function for read-out, links to get_readval()
