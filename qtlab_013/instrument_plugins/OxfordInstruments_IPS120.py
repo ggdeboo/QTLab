@@ -1,6 +1,7 @@
 # OxfordInstruments_IPS120.py class, to perform the communication between the Wrapper and the device
 # Guenevere Prawiroatmodjo <guen@vvtp.tudelft.nl>, 2009
 # Pieter de Groot <pieterdegroot@gmail.com>, 2009
+# Sam Hile <samhile@gmail.com> 2011
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -17,10 +18,11 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 from instrument import Instrument
-from time import time, sleep
+from time import time
 import visa
 import types
 import logging
+import qt
 
 class OxfordInstruments_IPS120(Instrument):
     '''
@@ -29,7 +31,7 @@ class OxfordInstruments_IPS120(Instrument):
     Usage:
     Initialize with
     <name> = instruments.create('name', 'OxfordInstruments_IPS120', address='<Instrument address>')
-    <Instrument address> = ASRL1::INSTR
+    <Instrument address> = ASRL1::INSTR / COMx
 
     Note: Since the ISOBUS allows for several instruments to be managed in parallel, the command
     which is sent to the device starts with '@n', where n is the ISOBUS instrument number.
@@ -56,9 +58,10 @@ class OxfordInstruments_IPS120(Instrument):
 
         self._address = address
         self._number = number
-        self._visainstrument = visa.SerialInstrument(self._address)
+        self._visainstrument = visa.instrument(self._address)
         self._values = {}
         self._visainstrument.stop_bits = 2
+        self._visainstrument.delay = 20e-3
 
         #Add parameters
         self.add_parameter('mode', type=types.IntType,
@@ -92,20 +95,20 @@ class OxfordInstruments_IPS120(Instrument):
             2 : "Off magnet at field (switch closed)",
             5 : "Heater fault (heater is on but current is low)",
             8 : "No switch fitted"})
-        self.add_parameter('polarity', type=types.IntType,
+        self.add_parameter('polarity', type=types.StringType,
             flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET)
         self.add_parameter('field_setpoint', type=types.FloatType,
             flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET,
-            minval=0, maxval=11)
+            minval=-11.9465, maxval=11.9465)
         self.add_parameter('sweeprate_field', type=types.FloatType,
             flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET,
-            minval=0, maxval=14)
+            minval=0, maxval=1.0)
         self.add_parameter('current_setpoint', type=types.FloatType,
             flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET,
-            minval=-90.93, maxval=90.93)
+            minval=-116.10, maxval=116.10)
         self.add_parameter('sweeprate_current', type=types.FloatType,
             flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET,
-            minval=0, maxval=240)
+            minval=0, maxval=9.718)
         self.add_parameter('remote_status', type=types.IntType,
             flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET,
             format_map = {
@@ -165,6 +168,13 @@ class OxfordInstruments_IPS120(Instrument):
 
         # Add functions
         self.add_function('get_all')
+        self.add_function('ramp_field_to')
+        self.add_function('ramp_field_to_zero')
+        self.add_function('init_magnet')
+        self.add_function('into_persistent')
+        self.add_function('outof_persistent')
+
+        #call some
         self.get_all()
 
     def get_all(self):
@@ -205,6 +215,92 @@ class OxfordInstruments_IPS120(Instrument):
         self.get_polarity()
         self.get_switch_heater()
 
+    # Set magnetic field
+    def ramp_field_to(self,value):
+        if (abs(self.get_field()-value) >= 0.00001):
+            if not self.get_activity()==0:
+                self.hold()
+            if not self.get_switch_heater()==1:
+                self.heater_on()
+                if not self.get_switch_heater() == 1:
+                    logging.info(__name__ + ' : Unable to switch heat on!')
+            self.set_field_setpoint('{0:2.4f}'.format(value))
+            self.to_setpoint()
+            #print 'Sweeping magnetic field to %2.4f Tesla...' % value
+            while abs(self.get_field()-value) >= 0.00001:
+                qt.msleep(5)
+            self.hold()
+            logging.info('Desired field reached. Wait 10s for the output ' +
+                            'voltage to stabilize.')
+            qt.msleep(10)
+            # wait time of 10s was added by Chunming after seeing a small quench event.
+        else:
+            logging.info('Magnet already at set field.')
+
+    #persistent mode
+    def into_persistent(self):
+        logging.info('Wait 5s before switching heater.')
+        qt.msleep(5)
+        if not self.get_activity()==0:
+            self.hold()
+        if self.get_switch_heater()==1:
+            self.heater_off()
+        logging.info('Wait 40s more for superconducting.')
+        qt.msleep(40)   #added by Chunming, wait 60s for heater off. 30s recommonded by the manual.
+        self.to_zero()
+        logging.info('Into persistent mode: Sweeping leads to zero...')
+        while abs(self.get_field()) >= 0.00001:
+            qt.msleep(1)
+        self.hold()
+        value = self.get_persistent_field()  
+        logging.info('Leads at zero. Persistent field {0:2.4f} Tesla.'.format(value))
+        
+    def outof_persistent(self):
+        logging.info('Wait 5s before resuming the current.')
+        qt.msleep(5)
+        if not self.get_activity()==0:
+            self.hold()
+        persfield = self.get_persistent_field()
+        if not persfield == self.get_field_setpoint():
+            self.set_field_setpoint('%2.4f' % persfield)
+        self.to_setpoint()
+        logging.info('Sweeping leads to persistent value...')
+        while abs(self.get_field() - persfield) >= 0.00001:
+            qt.msleep(1)
+        qt.msleep(5)
+        self.heater_on()
+        self.hold()    
+        logging.info('Out of persistent mode.')
+
+    # Set magnetic field to zero
+    def ramp_field_to_zero(self):
+        if not self.get_activity()==0:
+            self.hold()
+        if not self.get_switch_heater()==1:
+            self.heater_on()
+        self.set_sweeprate_field(0.1)
+        self.to_zero()
+        logging.info('Sweeping magnetic field quickly to zero...')
+        while abs(self.get_field()) >= 0.00001:
+            qt.msleep(1)
+
+        self.hold()    
+        logging.info('Field at zero.')
+
+    # Initialize magnet and put into high resolution
+    def init_magnet(self,sweeprate=0.1):
+        '''
+        Initializes magnet and puts it into high resolution.
+        '''
+        self.get_all()
+        self.remote()
+        self.hold()
+        self._write('Q4')
+        self.set_sweeprate_field('%2.4f' % sweeprate)
+        if not self.get_activity()==0:
+            self.hold()
+
+
     # Functions
     def _execute(self, message):
         '''
@@ -217,13 +313,26 @@ class OxfordInstruments_IPS120(Instrument):
             None
         '''
         logging.info(__name__ + ' : Send the following command to the device: %s' % message)
-        self._visainstrument.write('@%s%s' % (self._number, message))
-        sleep(20e-3) # wait for the device to be able to respond
-        result = self._visainstrument.read()
+        result = self._visainstrument.ask('@%s%s' % (self._number, message))
         if result.find('?') >= 0:
-            print "Error: Command %s not recognized" % message
+            logging.error("Error: Command {0} not recognized".format(message))
         else:
             return result
+        
+    def _write(self, message):
+        '''
+        Write a command to the device, no response (for Q command)
+
+        Input:
+            message (str) : write command for the device
+
+        Output:
+            None
+        '''
+        logging.info(__name__ + ' : Send the following command to the ' + 
+                        'device: {0}'.format(message))
+        self._visainstrument.write('@%s%s' % (self._number, message))
+
 
     def identify(self):
         '''
@@ -446,7 +555,7 @@ class OxfordInstruments_IPS120(Instrument):
             None
         '''
         logging.info(__name__ + ' : Setting target current to %s' % current)
-        self._execute('I%3.3f' % round(current,3))	#rounding added by Joost
+        self._execute('I{0:3.3f}'.format(current))
         self.get_field_setpoint() # Update field setpoint
 
     def do_get_sweeprate_current(self):
@@ -474,7 +583,7 @@ class OxfordInstruments_IPS120(Instrument):
             None
         '''
         logging.info(__name__ + ' : Set sweep rate (current) to %s Amps/min' % sweeprate)
-        self._execute('S%1.3f' % round(sweeprate,3))	#rounding added by Joost
+        self._execute('S{0:1.3f}'.format(sweeprate))
         self.get_sweeprate_field() # Update sweeprate_field
 
     def do_get_field(self):
@@ -515,7 +624,7 @@ class OxfordInstruments_IPS120(Instrument):
             None
         '''
         logging.info(__name__ + ' : Setting target field to %s' % field)
-        self._execute('J%2.4f' % round(field,4))	#rounding added by Joost
+        self._execute('J{0:2.4f}'.format(field))
         self.get_current_setpoint() #Update current setpoint
 
     def do_get_sweeprate_field(self):
@@ -543,7 +652,7 @@ class OxfordInstruments_IPS120(Instrument):
             None
         '''
         logging.info(__name__ + ' : Set sweep rate (field) to %s Tesla/min' % sweeprate)
-        self._execute('T%1.4f' % round(sweeprate,4))	#rounding added by Joost
+        self._execute('T{0:1.4f}'.format(sweeprate))
         self.get_sweeprate_current() # Update sweeprate_current
 
     def do_get_voltage_limit(self):
@@ -796,7 +905,8 @@ class OxfordInstruments_IPS120(Instrument):
             logging.info(__name__ + ' : Setting switch heater to %s' % status.get(mode, "Unknown"))
             self._execute('H%s' % mode)
             print "Setting switch heater... (wait 20s)"
-            sleep(20)
+            qt.msleep(20)
+            print '...OK'
         else:
             print 'Invalid mode inserted.'
 
@@ -864,7 +974,6 @@ class OxfordInstruments_IPS120(Instrument):
             5 : "Tesla, Magnet sweep: slow"
             8 : "Amps, (Magnet sweep: unaffected)",
             9 : "Tesla, (Magnet sweep: unaffected)"
-True
 
         Output:
             None
@@ -880,6 +989,55 @@ True
         if status.__contains__(mode):
             logging.info(__name__ + ' : Setting device mode to %s' % status.get(mode, "Unknown"))
             self._execute('M%s' % mode)
+        else:
+            print 'Invalid mode inserted.'
+
+    def do_set_polarity(self,mode1,mode2):
+        '''
+        Set the polarity of the output current (untested! -sam)
+        This is a function for backwards compatibility with the PS120, it
+        should not be used with the IPS120 supply as it will go to negative
+        fields by itself.
+
+        Input:
+            Mode1 (int):
+        0 : "Desired: Positive, Magnet: Positive, Commanded: Positive",
+        1 : "Desired: Positive, Magnet: Positive, Commanded: Negative",
+        2 : "Desired: Positive, Magnet: Negative, Commanded: Positive",
+        3 : "Desired: Positive, Magnet: Negative, Commanded: Negative",
+        4 : "Desired: Negative, Magnet: Positive, Commanded: Positive",
+        5 : "Desired: Negative, Magnet: Positive, Commanded: Negative",
+        6 : "Desired: Negative, Magnet: Negative, Commanded: Positive",
+        7 : "Desired: Negative, Magnet: Negative, Commanded: Negative"
+            Mode2 (int):
+        1 : "Negative contactor closed",
+        2 : "Positive contactor closed",
+        3 : "Both contactors open",
+        4 : "Both contactors closed"
+
+        Output:
+            None
+        '''
+        status1 = {
+        0 : "Desired: Positive, Magnet: Positive, Commanded: Positive",
+        1 : "Desired: Positive, Magnet: Positive, Commanded: Negative",
+        2 : "Desired: Positive, Magnet: Negative, Commanded: Positive",
+        3 : "Desired: Positive, Magnet: Negative, Commanded: Negative",
+        4 : "Desired: Negative, Magnet: Positive, Commanded: Positive",
+        5 : "Desired: Negative, Magnet: Positive, Commanded: Negative",
+        6 : "Desired: Negative, Magnet: Negative, Commanded: Positive",
+        7 : "Desired: Negative, Magnet: Negative, Commanded: Negative"
+        }
+        status2 = {
+        1 : "Negative contactor closed",
+        2 : "Positive contactor closed",
+        3 : "Both contactors open",
+        4 : "Both contactors closed"
+        }
+        if status1.__contains__(mode1) and status2.__contains__(mode2):
+            logging.info(__name__ + ' : Setting device polarity mode1 to %s' % status.get(mode, "Unknown"))
+            logging.info(__name__ + ' : Setting device polarity mode2 to %s' % status.get(mode, "Unknown"))
+            self._execute('X%s' % (mode1 + mode2))
         else:
             print 'Invalid mode inserted.'
 
@@ -918,25 +1076,7 @@ True
         }
         logging.info(__name__ + ' : Get device polarity')
         result = self._execute('X')
-        logging.info(__name__ + ' : %s' % status1.get(int(result[13]), "Unknown") + ", %s" % status2.get(int(result[14]), "Unknown"))
-        return int(result[13])
-
-    def do_set_polarity(self,mode):
-	'''
-	created by Joost and Markus
-	Set polarity of the field
-	'''
-        status = {
-	0 : "No action",
-        1 : "Set positive current",
-        2 : "Set negative current",
-	4 : "Swap polarity"
-        }
-        if status.__contains__(mode):
-        	logging.info(__name__ + ' : Setting magnet activity to %s' % status.get(mode, "Unknown"))
-        	self._execute('P%s' % mode)
-        else:
-        	print 'Invalid mode inserted.'
+        return status1.get(int(result[13]), "Unknown") + ", " + status2.get(int(result[14]), "Unknown")
 
     def get_changed(self):
         print "Current: "
