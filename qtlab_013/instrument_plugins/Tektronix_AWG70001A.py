@@ -77,6 +77,8 @@ class Tektronix_AWG70001A(Instrument):
         self._installed_options = self._visainstrument.ask('*OPT?')
         if '150' in self._installed_options:
             self._max_samplerate = 50e9
+        if '03' in self._installed_options:
+            self._sequencer = True
         else:
             self._max_samplerate = 25e9
 
@@ -99,14 +101,20 @@ class Tektronix_AWG70001A(Instrument):
             )
         self.add_parameter('wlist', type=types.StringType,
             flags=Instrument.FLAG_GET)
-        self.add_parameter('trigger_mode', type=types.StringType,
-            flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET)
         self.add_parameter('trigger_impedance', type=types.FloatType,
             flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET,
             minval=49, maxval=2e3, units='Ohm')
         self.add_parameter('trigger_level', type=types.FloatType,
             flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET,
             minval=-5, maxval=5, units='V')
+        self.add_parameter('trigger_source', type=types.StringType,
+            flags=Instrument.FLAG_GET,
+            format_map = { 'INT' : 'internal',
+                           'EXT' : 'external' })
+        self.add_parameter('trigger_mode', type=types.StringType,
+            flags=Instrument.FLAG_GET,
+            format_map = { 'SYNC'  : 'synchronous',
+                           'ASYN' :  'asynchronous' })
 
         # function generator
         self.add_parameter('function_generator_amplitude',
@@ -120,7 +128,8 @@ class Tektronix_AWG70001A(Instrument):
         self.add_parameter('function_generator_frequency',
             type=types.FloatType,
             flags=Instrument.FLAG_GET,
-            units='Hz')
+            units='Hz',
+            format='%.03e')
         self.add_parameter('function_generator_period',
             type=types.FloatType,
             flags=Instrument.FLAG_GET,
@@ -150,7 +159,8 @@ class Tektronix_AWG70001A(Instrument):
         # clock
         self.add_parameter('clock_rate', type=types.FloatType,
             flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET,
-            minval=1.49e3, maxval=self._max_samplerate, units='Hz')
+            minval=1.49e3, maxval=self._max_samplerate, units='Hz',
+            format='%.03e')
         self.add_parameter('clock_source', type=types.StringType,
             flags=Instrument.FLAG_GET,
             format_map={'INT'   :   'internal',
@@ -203,14 +213,29 @@ class Tektronix_AWG70001A(Instrument):
         # mode parameters
         self.add_parameter('run_mode', type=types.StringType,
             flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET,
-            option_list=('CONT','TRIG','TCON')
-            )
+            format_map = {'CONT' : 'continuous',
+                          'TRIG' : 'triggered',
+                          'TCON' : 'triggered continuous'})
+
+        self.add_parameter('waveform_list_size', type=types.IntType,
+            flags=Instrument.FLAG_GET)
+
+        # sequencer
+        if self._sequencer:
+            self.add_parameter('sequence_list_size', type=types.IntType,
+                flags=Instrument.FLAG_GET)
+            self.add_parameter('sequence_list', type=types.StringType,
+                flags=Instrument.FLAG_GET)
+            self.add_parameter('sequence', type=types.StringType,
+                flags=Instrument.FLAG_GETSET)
 
         # Add functions
         self.add_function('reset')
         self.add_function('get_all')
         self.add_function('clear_waveforms')
-        self.add_function('set_trigger_mode_on')
+        self.add_function('clear_sequence_list')
+        self.add_function('clear_waveform_list')
+#        self.add_function('set_trigger_mode_on')
         self.add_function('square_pulse')
         self.add_function('gaussian_pulse')
         self.add_function('sinc_pulse')
@@ -257,9 +282,11 @@ class Tektronix_AWG70001A(Instrument):
 
         self.get_mode()
 
-        self.get_trigger_mode()
+        self.get_run_mode()
         self.get_trigger_impedance()
         self.get_trigger_level()
+        self.get_trigger_source()
+        self.get_trigger_mode()
 
         self.get_function_generator_amplitude()
         self.get_function_generator_DC()
@@ -284,6 +311,11 @@ class Tektronix_AWG70001A(Instrument):
         self.get('status')
 
         self.get_wlist()
+        self.get_waveform_list_size()
+        if self._sequencer:
+            self.get_sequence_list()
+            self.get_sequence_list_size()
+            self.get_sequence()
 
         self.get_run_mode()
         self.get_output()
@@ -300,9 +332,23 @@ class Tektronix_AWG70001A(Instrument):
         '''
         logging.debug(__name__ + ' : Clear waveforms from channels')
         self._visainstrument.write('SOUR1:FUNC:USER ""')
-        self._visainstrument.write('SOUR2:FUNC:USER ""')
-        self._visainstrument.write('SOUR3:FUNC:USER ""')
-        self._visainstrument.write('SOUR4:FUNC:USER ""')
+
+    def clear_waveform_list(self):
+        '''
+        Clears the waveform list, removing all the user generated waveforms.
+        '''
+        logging.debug(__name__ + ' : Clear waveform list.')
+        self._visainstrument.write('WLIST:WAV:DEL ALL')
+        self.get_wlist()
+
+    def clear_sequence_list(self):
+        '''
+        Clears the sequence list, removing all the user generated waveforms.
+        '''
+        logging.debug(__name__ + ' : Clear sequence list.')
+        self._visainstrument.write('SLIST:SEQ:DEL ALL')
+        self.get_sequence_list()
+        self.get_sequence_list_size()
 
     def run(self):
         '''
@@ -318,8 +364,8 @@ class Tektronix_AWG70001A(Instrument):
         '''
         logging.debug(__name__ + ' : Run/Initiate output of a waveform or sequence')
         self._visainstrument.write('AWGC:RUN:IMM')
-        while self._visainstrument.ask('*OPC?') == '0':
-            qt.msleep(0.01)
+#        while self._visainstrument.ask('*OPC?') == '0':
+#            qt.msleep(0.01)
         self.get_AWG_run_state()
 
     def stop(self):
@@ -371,7 +417,6 @@ class Tektronix_AWG70001A(Instrument):
     def do_set_waveform(self, waveform):
         '''
         This command sets the output waveform from the current waveform
-        list when Run Mode is not Sequence.
 
         Input:
             waveform (str) : the waveform filename as loaded in waveform list. 
@@ -407,7 +452,10 @@ class Tektronix_AWG70001A(Instrument):
             waveform (str) : the waveform filename as loaded in waveform list
         '''
         logging.debug(__name__ + ' : Get the output waveform')
-        return self._visainstrument.ask('SOUR:WAV?')
+        response = self._visainstrument.ask('SOUR:WAV?').strip('"')
+        if ',' in response:
+            # sequence
+            return response.split(',')[0], response.split(',')[1]
 
     def do_get_wlist(self):
         '''
@@ -418,7 +466,7 @@ class Tektronix_AWG70001A(Instrument):
         Output:
             wlist (array) : the waveform list in an array.
         '''
-        size = int(self._visainstrument.ask('WLIST:SIZE?'))
+        size = self.get_waveform_list_size()
         wlist = []
         for i in range(1, size + 1):                    # index starts at 1
             wname = self._visainstrument.ask('WLIST:NAME? {0:d}'.format(i))
@@ -529,9 +577,15 @@ class Tektronix_AWG70001A(Instrument):
 
     def do_get_run_mode(self):
         '''
-        Get the run mode of the device
+        Reads the trigger mode from the instrument
+
+        Input:
+            None
+
+        Output:
+            mode (string) : 'Trig' or 'Cont' depending on the mode
         '''
-        logging.debug(__name__ + ' : Getting the run mode.')
+        logging.debug(__name__  + ' : Get trigger mode from instrument')
         return self._visainstrument.ask('SOUR:RMOD?')
 
     def do_set_run_mode(self, run_mode):
@@ -561,48 +615,19 @@ class Tektronix_AWG70001A(Instrument):
         '''
         self.set_runmode('SEQ')
 
-    def set_trigger_mode_on(self):
-        '''
-        Sets the trigger mode to 'On'
-
-        Input:
-            None
-
-        Output:
-            None
-        '''
-        self.set_runmode('TRIG')
+#    def set_trigger_mode_on(self):
+#        '''
+#        Sets the trigger mode to 'On'
+#
+#        Input:
+#            None
+#
+#        Output:
+#            None
+#        '''
+#        self.set_runmode('TRIG')
 
     # Parameters
-    def do_get_trigger_mode(self):
-        '''
-        Reads the trigger mode from the instrument
-
-        Input:
-            None
-
-        Output:
-            mode (string) : 'Trig' or 'Cont' depending on the mode
-        '''
-        logging.debug(__name__  + ' : Get trigger mode from instrument')
-        return self._visainstrument.ask('AWGC:RMOD?')
-
-    def do_set_trigger_mode(self, mod):
-        '''
-        Sets trigger mode of the instrument
-
-        Input:
-            mod (string) : Either 'Trig' or 'Cont' depending on the mode
-
-        Output:
-            None
-        '''
-        if (mod.upper()=='TRIG'):
-            self.set_trigger_mode_on()
-        elif (mod.upper()=='CONT'):
-            self.set_runmode('CONT')
-        else:
-            logging.error(__name__ + ' : Unable to set trigger mode to %s, expected "TRIG" or "CONT"' % mod)
 
     def do_get_trigger_impedance(self):
         '''
@@ -646,6 +671,34 @@ class Tektronix_AWG70001A(Instrument):
         '''
         logging.debug(__name__  + ' : Get trigger level from instrument')
         return float(self._visainstrument.ask('TRIG:LEV?'))
+
+    def do_get_trigger_source(self):
+        '''
+        Reads the trigger source from the instrument
+
+        Input:
+            None
+
+        Output:
+            internal
+            external
+        '''
+        logging.debug(__name__ + ' : Get the trigger source from instrument.')
+        return self._visainstrument.ask('TRIG:SOUR?')
+
+    def do_get_trigger_mode(self):
+        '''
+        Reads the trigger mode for the external trigger from the instrument
+
+        Input:
+            None
+
+        Output:
+            synchronous
+            asynchronous
+        '''
+        logging.debug(__name__ + ' : Get the trigger mode from instrument.')
+        return self._visainstrument.ask('TRIG:MODE?')
 
     def do_set_trigger_level(self, level):
         '''
@@ -1051,7 +1104,7 @@ class Tektronix_AWG70001A(Instrument):
             m1 (bool[numpoints])  : marker1
             m2 (bool[numpoints])  : marker2
             wfm_name (string)    : waveform name
-            clock (int)          : frequency (Hz)
+            sample_rate (int)          : frequency (Hz)
             mode (string)        : 'UND' 'REAL' 'I' 'Q'
 
         Output:
@@ -1072,12 +1125,12 @@ class Tektronix_AWG70001A(Instrument):
             if not((len(w)==len(m1))):
                 return 'marker length needs to be the same as waveform length'
             m1.dtype = uint8
-            marker_vector += m1 * 128
+            marker_vector += m1 * 64        # bit 6 for marker 1
         if m2 is not None:
             if not((len(w)==len(m2))):
                 return 'marker length needs to be the same as waveform length'
             m2.dtype = uint8
-            marker_vector += m2 * 64
+            marker_vector += m2 * 128       # bit 7 for marker 2
         
 #        if (not((len(w)==len(m1)) and ((len(m1)==len(m2))))):
 #            return 'error inappropriate marker length'
@@ -1091,8 +1144,11 @@ class Tektronix_AWG70001A(Instrument):
         ws = ''
         
         # Delete the old waveform  
-        self._visainstrument.write(
-            'WLIS:WAV:DEL "{0}"'.format(wfm_name))
+        if wfm_name in self.get_wlist():
+            logging.info(
+                'Waveform of the same name present in list, overwriting...')
+            self._visainstrument.write(
+                'WLIS:WAV:DEL "{0}"'.format(wfm_name))
 
         # Create a new waveform with the specified name and size)
         self._visainstrument.write(
@@ -1135,8 +1191,8 @@ class Tektronix_AWG70001A(Instrument):
                             'WLIS:WAV:MARK:DATA "{0}", {1}, {2}, #9{3:09d}{4}'.format(
                                                     wfm_name,
                                                     i*block_size,
-                                                    last_block_size,
-                                                    last_block_size,
+                                                    block_size,
+                                                    block_size,
                                                     block_marker.tobytes())
                                                     )
                 # remainder
@@ -1348,3 +1404,154 @@ class Tektronix_AWG70001A(Instrument):
 
     def get_all_error_codes(self):
         return self._visainstrument.ask('SYSTEM:ERROR:CODE:ALL?')
+
+    def trigger(self):
+        self._visainstrument.write('*TRG')
+
+    def trigger_a(self):
+        self._visainstrument.write('TRIGGER:IMMEDIATE ATR')
+
+    def trigger_b(self):
+        self._visainstrument.write('TRIGGER:IMMEDIATE BTR')
+
+    def do_get_waveform_list_size(self):
+        return int(self._visainstrument.ask('WLISt:SIZE?'))
+
+    # sequencer
+    def do_get_sequence_list_size(self):
+        return int(self._visainstrument.ask('SLISt:SIZE?'))
+
+    def create_sequence(self, sequence_name, number_of_steps, 
+                            number_of_tracks=1):
+        self._visainstrument.write('SLIS:SEQ:NEW "{0}", {1}, {2}'.format( 
+                       sequence_name, number_of_steps, number_of_tracks))
+        if not (self.get_sequence_list()[-1] == sequence_name):
+            # sequence not added, show all error messages
+            logging.error(
+                'Sequence has not been added, errors from instruments: ' + 
+                    '{0}'.format(self.get_all_error_codes()))
+
+    def get_sequence_name(self, sequence_number):
+        return self._visainstrument.ask(
+                        'SLIST:NAME?  {0:d}'.format(sequence_number))
+
+    def get_sequence_samplerate(self, sequence_name):
+        return self._visainstrument.ask(
+                        'SLIST:SEQ:SRAT? "{0}"'.format(sequence_name))
+
+    def set_sequence_samplerate(self, sequence_name, sample_rate):
+        self._visainstrument.write(
+                'SLIST:SEQ:SRAT "{0}", {1:.3E}'.format(sequence_name, sample_rate))
+
+    def do_get_sequence_list(self):
+        '''
+        This command returns the sequence list in a list of strings.
+        Input:
+            None
+
+        Output:
+            sequence_list (array) : the waveform list in an array.
+        '''
+        size = self.get_sequence_list_size()
+        sequence_list = []
+        for i in range(1, size + 1):                    # index starts at 1
+            sname = self.get_sequence_name(i)
+            sname = sname.replace('"','')
+            sequence_list.append(sname)
+        return sequence_list
+
+    def set_sequence_step_waveform(self, sequence_name, waveform_name, step):
+        '''
+        Assigns a waveform to a step in the sequence. 
+        '''
+        logging.debug(__name__ + ' Assign waveform {0} to sequence {1}'.format(
+            waveform_name, sequence_name))
+        if not (waveform_name in self.get_wlist()):
+            logging.error('Waveform {0} not present on AWG.'.format(
+                waveform_name))
+            return None
+        if not (sequence_name in self.get_sequence_list()):
+            logging.error('Sequence {0} not present on AWG.'.format(
+                sequence_name))
+            return None
+        if step > self.get_sequence_length(sequence_name):
+            logging.error('Sequence size smaller than step number ({0}).'.format(
+                step)) 
+            return None
+        self._visainstrument.write(
+            'SLIS:SEQ:STEP{0}:TASS1:WAVEFORM "{1}","{2}"'.format(
+                step, sequence_name, waveform_name))
+
+    def set_sequence_step_repetition_count(self, sequence_name, step, count):
+        '''
+        Set the repetition count for a step in a sequence.
+        Note: Sequence steps start countint from 1
+        '''
+        if not (sequence_name in self.get_sequence_list()):
+            logging.error('Sequence {0} not present on AWG.'.format(
+                sequence_name))
+            return None
+        if step > self.get_sequence_length(sequence_name):
+            logging.error('Sequence size smaller than step number ({0}).'.format(
+                step)) 
+            return None
+        if (count > 2**20) or (count < 1):
+            logging.error(
+                'Repetition count has to be bigger than 1 and smaller ' + 
+                'than 1,048,576.')
+        self._visainstrument.write(
+            'SLIST:SEQUENCE:STEP{0}:RCOUNT "{1}", {2}'.format(step, 
+                                                    sequence_name, 
+                                                    count))
+
+    def get_sequence_length(self, sequence_name):
+        return int(self._visainstrument.ask('SLIS:SEQ:LENG? "{0}"'.format(
+            sequence_name)))
+
+    def do_get_sequence(self):
+        '''
+        Get the currently assigned waveform or sequence
+        '''
+        return self._visainstrument.ask('SOUR:CASS?').strip('"')
+
+    def do_set_sequence(self, sequence_name, track=1):
+        self._visainstrument.write(
+            'SOUR:CASS:SEQ "{0}", {1}'.format(sequence_name, track))
+
+    def get_sequence_step_goto(self, sequence_name, step):
+        '''
+        Get the goto for the specified sequence step
+        '''
+        logging.debug(__name__ + ' : get the sequence step goto.')
+        return self._visainstrument.ask(
+            'SLIS:SEQ:STEP{0}:GOTO? "{1}"'.format(step, sequence_name))
+
+    def set_sequence_step_goto(self, sequence_name, step, target):
+        '''
+        Set the goto target for the specified sequence step
+
+        Options:
+            <NR1> : step number between 1 and 16383
+            LAST
+            FIRSt
+            NEXT
+            END
+        '''
+        logging.debug(__name__ + 
+            ' : setting target of step {0} of sequence {1} to {2}'.format(
+                step, sequence_name, target))
+        self._visainstrument.write(
+            'SLIS:SEQ:STEP{0}:GOTO "{1}", {2}'.format(
+                step, sequence_name, target))
+
+    def get_sequence_step_wait_input(self, sequence_name, step):
+        return self._visainstrument.ask(
+            'SLIST:SEQ:STEP{0}:WINPUT? "{1}"'.format(step, sequence_name))
+
+    def set_sequence_step_wait_input(self, sequence_name, step, attr):
+        if attr in ['ATR', 'BTR', 'ITR', 'OFF']:
+            self._visainstrument.write(
+                'SLIST:SEQ:STEP{0}:WINPUT "{1}", {2}'.format(
+                    step, sequence_name, attr))
+        else:
+            logging.error('Only supported wait inputs: ATR, BTR, ITR, OFF')

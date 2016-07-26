@@ -20,7 +20,7 @@ from instrument import Instrument
 import visa
 import types
 import logging
-import numpy
+from numpy import frombuffer, float32
 import math
 
 class RS_FSL6(Instrument):
@@ -51,6 +51,7 @@ class RS_FSL6(Instrument):
         self._address = address
         self._visainstrument = visa.instrument(self._address)
         self._visainstrument.timeout = 1
+        self._visainstrument.term_chars = '\n'
 
         self._installed_options = self._visainstrument.ask('*OPT?')
         bw_min = 300
@@ -71,6 +72,8 @@ class RS_FSL6(Instrument):
         if 'B22' in self._installed_options:
             logging.info('Option B22 (RF amplifier) is installed')
 
+        self._visainstrument.write('FORM REAL, 32')
+
         # Add parameters
         # frequency section
         self.add_parameter('center_frequency', type=types.FloatType,
@@ -79,12 +82,36 @@ class RS_FSL6(Instrument):
             units='Hz', format='%.04e')
         self.add_parameter('span', type=types.FloatType,
             flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET,
-            minval=0, maxval=3e9, 
+            minval=0, maxval=6e9, 
+            units='Hz', format='%.04e')
+        self.add_parameter('start_frequency', type=types.FloatType,
+            flags=Instrument.FLAG_GET,
+            minval=9e3, maxval=6e9,
+            units='Hz', format='%.04e')
+        self.add_parameter('stop_frequency', type=types.FloatType,
+            flags=Instrument.FLAG_GET,
+            minval=9e3, maxval=6e9,
             units='Hz', format='%.04e')
         self.add_parameter('bandwidth_resolution', type=types.FloatType,
             flags=Instrument.FLAG_GET,
             units='Hz', format='%.0f',
             minval=bw_min, maxval=10e6)
+
+        # sweep
+        self.add_parameter('sweep_mode', type=types.StringType,
+            flags=Instrument.FLAG_GETSET,
+            option_list=('continuous','single'))
+        self.add_parameter('sweep_count', type=types.IntType,
+            flags=Instrument.FLAG_GETSET,
+            minval=0, maxval=32767)
+        self.add_parameter('sweep_time', type=types.FloatType,
+            flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET,
+            minval=1e-6, maxval=60,
+            units='s', format='%.04e')
+        self.add_parameter('sweep_points', type=types.IntType,
+            flags=Instrument.FLAG_GETSET,
+            minval=101, maxval=32001,
+            )
         
         # input section
         self.add_parameter('reference_level', type=types.FloatType,
@@ -103,30 +130,77 @@ class RS_FSL6(Instrument):
                 flags=Instrument.FLAG_GET,
                 )
 
-        self.add_parameter('sweep_time', type=types.FloatType,
-            flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET,
-            minval=1e-6, maxval=60,
-            units='s', format='%.04e')
         self.add_parameter('channel_power', type=types.FloatType,
             flags=Instrument.FLAG_GET, 
-            units='W', format='%.10e')
+            units='W', format='%.3e')
+
+        # trace
+        self.add_parameter('trace_mode', type=types.StringType,
+            flags=Instrument.FLAG_GETSET,
+            format_map = { 'WRIT' : 'clear write',
+                           'MAXH' : 'max hold',
+                           'MINH' : 'min hold',
+                           'AVER' : 'average',
+                           'VIEW' : 'view',
+                           'OFF'  : 'blank'})
+
+        self.add_parameter('detector_mode', type=types.StringType,
+            flags=Instrument.FLAG_GETSET,
+            format_map = { 'APE'  : 'auto peak',
+                           'POS'  : 'positive peak',
+                           'NEG'  : 'negative peak',
+                           'SAMP' : 'sample',
+                           'RMS'  : 'RMS',
+                           'AVER' : 'average',
+                           'QPE'  : 'quasi peak'})
+
         self.add_parameter('timetracemarkerpower', type=types.FloatType,
             flags=Instrument.FLAG_GET, 
             units='W', format='%.10e')
-        self.add_parameter('IQresult', type=types.StringType,
-            flags=Instrument.FLAG_GET, 
-            units='')
-        self.add_parameter('tracedata', type=types.StringType,
-            flags=Instrument.FLAG_GET, 
-            units='')
         self.add_parameter('display_onoff',
             flags=Instrument.FLAG_SET,
             type=types.StringType, units='')
-        self.add_parameter('triggerlevel', type=types.FloatType,
-            flags=Instrument.FLAG_SET,
+
+        # IQ
+        self.add_parameter('IQ_sample_rate', type=types.FloatType,
+            flags=Instrument.FLAG_GET,
+            units='S/s', minval=10e3, maxval=65.83e6,
+            format='%.3e')
+        self.add_parameter('IQ_samples', type=types.IntType,
+            flags=Instrument.FLAG_GET,
+            units='S', minval=1, maxval=523776)
+        self.add_parameter('IQ_pretrigger_samples', type=types.IntType,
+            flags=Instrument.FLAG_GET,
+            units='S')
+        self.add_parameter('IQresult', type=types.StringType,
+            flags=Instrument.FLAG_GET, 
+            units='')
+
+        # trigger
+        self.add_parameter('trigger_level', type=types.FloatType,
+            flags=Instrument.FLAG_GETSET,
             minval=0.5, maxval=3.5,
             units='V', format='%.04e')
+        self.add_parameter('trigger_delay', type=types.FloatType,
+            flags=Instrument.FLAG_GETSET,
+            minval=-100.0, maxval=100.0,
+            units='s', format='%.03e')
+        self.add_parameter('trigger_source', type=types.StringType,
+            flags=Instrument.FLAG_GETSET,
+            format_map = { 'IMM' : 'immediate',
+                           'EXT' : 'external',
+                           'IFP' : 'ifpower',
+                           'VID' : 'video' })
 
+        # reference
+        self.add_parameter('reference_oscillator', type=types.StringType,
+            flags=Instrument.FLAG_GETSET,
+            format_map = { 'INT' : 'internal',
+                           'EXT' : 'external'})
+
+        self.add_parameter('measurement_mode', type=types.StringType,
+            flags=Instrument.FLAG_GET,
+            format_map={ 'SAN' : 'spectrum analyser'})
 
         # Add functions
         self.add_function('reset')
@@ -180,14 +254,30 @@ class RS_FSL6(Instrument):
         logging.info(__name__ + ' : reading all settings from instrument')
         self.get_center_frequency()
         self.get_span()
+        self.get_start_frequency()
+        self.get_stop_frequency()
         self.get_bandwidth_resolution()
+        self.get_sweep_count()
         self.get_reference_level()
+        self.get_sweep_mode()
         self.get_sweep_time()
+        self.get_sweep_points()
         self.get_channel_power()
+        self.get_trace_mode()
+        self.get_detector_mode()
+
         self.get_input_attenuation()
         self.get_input_impedance()
         if 'B22' in self._installed_options:
             self.get_preamp_status()
+        self.get_reference_oscillator()
+        self.get_measurement_mode()
+        self.get_IQ_sample_rate()
+        self.get_IQ_samples()
+        self.get_IQ_pretrigger_samples()
+        self.get_trigger_level()
+        self.get_trigger_delay()
+        self.get_trigger_source()
 
     def do_set_display_onoff(self, type):
         '''
@@ -226,13 +316,17 @@ class RS_FSL6(Instrument):
         #self._visainstrument.write('BAND:RES 20MHz')     #resultion bandwidth. 20 MHz, only for test
         self._visainstrument.write('FREQ:SPAN 0Hz')        
         self._visainstrument.write('TRAC:IQ:STAT ON')       
-        #enables acquisition of I/Q data, trace display on device not possible in this operation mode
+        # enables acquisition of I/Q data, trace display on device not 
+        # possible in this operation mode
         self._visainstrument.write('TRAC:IQ:SET NORM,20MHz,64MHz,EXT,POS,0,640')     
         #self._visainstrument.write('TRAC:IQ:SET NORM,100kHz,32MHz,EXT,POS,0,512') 
         #sample measurement configuration
-        #filter: NORM, RBW: 10MHz, sample rate: 32 MHz, trigger source: external (EXT) / internal (IMM), trigger slope: positive, 
+        #filter: NORM, RBW: 10MHz, sample rate: 32 MHz, trigger source: 
+        # external (EXT) / internal (IMM), trigger slope: positive, 
         #pretrigger samples: 0, numer of samples: 512
-        self._visainstrument.write('FORMat ASC')        #selects format of response data (either REAL,32 or ASC for ASCII)
+        self._visainstrument.write('FORMat ASC') # selects format of response 
+                                                 # data (either REAL,32 or 
+                                                 # ASC for ASCII)
         self._visainstrument.write('FREQ:CONT OFF')
         #return self._visainstrument.write('TRAC:IQ:DATA?')         #starts measurements and reads results
         #self._visainstrument.write('INIT;*WAI')             #apparently not necessary
@@ -274,9 +368,9 @@ class RS_FSL6(Instrument):
             None
         '''
         logging.debug(__name__ + ' : stop channel power measurement') 
-        self._visainstrument.write('INIT:CONT ON')    	# Switches over to continuous sweep mode.   
+        self._visainstrument.write('INIT:CONT ON')    # Switches over to continuous sweep mode.   
 
-    def init_zero_span(self,resbw,vidbw):
+    def init_zero_span(self, resbw, vidbw):
         '''
         Initializes a zero span measurement
 
@@ -400,7 +494,55 @@ class RS_FSL6(Instrument):
         '''
         return float(self._visainstrument.ask('SENS:BWID:RES?'))
 
-    def do_set_triggerlevel(self, triggerlevel):
+    def do_get_sweep_mode(self):
+        '''
+        Get whether the instrument is in continuous sweep mode or single 
+        measurements mode.
+        '''
+        logging.debug(__name__ + ' : getting the sweep mode.')
+        sweep_mode = self._visainstrument.ask('INIT:CONT?')
+        if sweep_mode == '0':
+            return 'single'
+        elif sweep_mode == '1':
+            return 'continuous'
+        else:
+            logging.error(
+                'Unknown response to INIT:CONT? : {0}'.format(sweep_mode))
+
+    def do_set_sweep_mode(self, sweep_mode):
+        '''
+        Set the sweep mode to single or continuous
+        '''
+        logging.debug(__name__ + 
+            ' : setting the sweep mode to {0}.'.format(sweep_mode))
+        if sweep_mode.upper() == 'SINGLE':
+            self._visainstrument.write('INIT:CONT OFF')
+        elif sweep_mode.upper() == 'CONTINUOUS':
+            self._visainstrument.write('INIT:CONT ON')
+
+    def do_get_sweep_count(self):
+        '''
+        Get the sweep count
+        '''
+        logging.debug(__name__ + ' : Getting the sweep count.')
+        return int(self._visainstrument.ask('SWE:COUN?'))
+
+    def do_set_sweep_count(self, sweep_count):
+        '''
+        Set the sweep count
+        '''
+        logging.debug(__name__ + 
+                    ' : Setting the sweep count to {0:d}'.format(sweep_count))
+        self._visainstrument.write('SWE:COUN {0:d}'.format(sweep_count))
+
+    def do_get_trigger_level(self):
+        '''
+        Get the trigger level
+        '''
+        logging.debug(__name__ + ' : getting trigger level.')
+        return float(self._visainstrument.ask('TRIG:LEV?'))
+
+    def do_set_trigger_level(self, triggerlevel):
         '''
         Set trigger level for TTL input
 
@@ -412,6 +554,42 @@ class RS_FSL6(Instrument):
         '''
         logging.debug(__name__ + ' : setting trigger level to %s V' % triggerlevel)
         self._visainstrument.write('TRIG:LEV %e V' % triggerlevel)        
+
+    def do_get_trigger_delay(self):
+        '''
+        Get the holdoff time of the trigger
+        '''
+        logging.debug(__name__ + ' : getting the trigger delay.')
+        return float(self._visainstrument.ask('TRIG:HOLD?'))
+
+    def do_set_trigger_delay(self, delay):
+        '''
+        Set the holdoff time of the trigger
+        '''
+        logging.debug(__name__ + 
+                ' : setting the trigger delay to {0:.3f} s'.format(delay))
+        if delay < 0.0:
+            # negative delay only allowed when instrument is in zero span
+            if not (self.get_span() == 0.0):
+                logging.error(
+                    'A negative delay can only be set if the span is zero.')
+                return None
+        self._visainstrument.write('TRIG:HOLD {0:f}s'.format(delay))
+
+    def do_get_trigger_source(self):
+        '''
+        Get the source for the trigger
+        '''
+        logging.debug(__name__ + ' : getting the trigger source.')
+        return(self._visainstrument.ask('TRIG:SOUR?')) 
+
+    def do_set_trigger_source(self, source):
+        '''
+        Set the source for the trigger
+        '''
+        logging.debug(__name__ + 
+                ' : setting the trigger source to {0}'.format(source))
+        self._visainstrument.write('TRIG:SOUR {0}'.format(source))
 
     def do_get_span(self):
         '''
@@ -438,6 +616,32 @@ class RS_FSL6(Instrument):
         '''
         logging.debug(__name__ + ' : setting span to %s Hz' % span)
         self._visainstrument.write('FREQ:SPAN %e' % span)
+
+    def do_get_start_frequency(self):
+        '''
+        Get start frequency from spectrum analyser
+
+        Input:
+            None
+
+        Output:
+            start_frequency (float) : spart frequency in Hz
+        '''
+        logging.debug(__name__ + ' : reading start frequency from instrument')
+        return float(self._visainstrument.ask('FREQ:STAR?'))
+
+    def do_get_stop_frequency(self):
+        '''
+        Get stop frequency from spectrum analyser
+
+        Input:
+            None
+
+        Output:
+            stop_frequency (float) : spart frequency in Hz
+        '''
+        logging.debug(__name__ + ' : reading stop frequency from instrument')
+        return float(self._visainstrument.ask('FREQ:STOP?'))
 
     def do_get_reference_level(self):
         '''
@@ -527,6 +731,110 @@ class RS_FSL6(Instrument):
                     ' : setting sweep time to {0} s'.format(sweep_time))
         self._visainstrument.write('SWE:TIME {0:e}'.format(sweep_time))
 
+    def do_get_sweep_points(self):
+        '''
+        Get the number of points in a sweep
+        '''
+        logging.debug(__name__ + ' : getting the number of sweep points.')
+        return int(self._visainstrument.ask('SWE:POIN?'))
+
+    def do_set_sweep_points(self, sweep_points):
+        '''
+        Set the number of points in a sweep
+        '''
+        logging.debug(__name__ + 
+            ' : setting the number of points in a sweep to {0:d}'.format(
+                    sweep_points))
+        self._visainstrument.write('SWE:POIN {0:d}'.format(sweep_points))
+
+    def do_get_reference_oscillator(self):
+        '''
+        Get the reference oscillator
+
+        Input: 
+            None
+        
+        Output:
+            internal
+            external
+        '''
+        logging.debug(__name__ + 
+                    ' : Getting the reference oscillator')
+        return self._visainstrument.ask('ROSC:SOUR?')
+
+    def do_set_reference_oscillator(self, reference):
+        '''
+        Set the reference oscillator
+    
+        Input:
+            INT
+            EXT
+
+        Output:
+            None
+        '''
+        logging.debug(__name__ + 
+            ' Setting the reference oscillator to {0}'.format(reference))
+        if reference == 'INT':
+            self._visainstrument.write('ROSC:SOUR INT')
+        elif reference == 'EXT':
+            self._visainstrument.write('ROSC:SOUR EXT')
+
+    def do_get_measurement_mode(self):
+        '''
+        Get the measurement mode. Without options the only mode is spectrum 
+        analyser
+        '''
+        logging.debug(__name__ + ' : getting the measurement mode.')
+        return self._visainstrument.ask('INST?')
+
+    def do_get_trace_mode(self):
+        '''
+        Get the trace mode.
+        '''
+        logging.debug(__name__ + ' : getting the trace mode.')
+        return self._visainstrument.ask('DISP:TRAC:MODE?')
+
+    def do_set_trace_mode(self, trace_mode):
+        '''
+        Set the trace mode.
+        '''
+        logging.debug(__name__ + 
+                ' : setting the trace mode to {0}.'.format(trace_mode))
+        self._visainstrument.write('DISP:TRAC:MODE {0}'.format(trace_mode))
+
+    def do_get_detector_mode(self):
+        '''
+        Get the detector mode.
+        '''
+        logging.debug(__name__ + ' : getting the detector mode.')
+        return self._visainstrument.ask('DET?')
+
+    def do_set_detector_mode(self, detector_mode):
+        '''
+        Set the detector mode.
+        '''
+        logging.debug(__name__ + 
+                ' : setting the detector mode to {0}.'.format(detector_mode))
+        self._visainstrument.write('DET {0}'.format(detector_mode))
+
+    def initialize_measurement(self, wait=True):
+        '''
+        Initialize a measurement
+        '''
+        if wait:
+            self._visainstrument.write('INIT;*WAI')
+        else:
+            self._visainstrument.write('INIT')
+
+    def get_error_message(self):
+        '''
+        Queries the earliest error queue entry and deletes it
+        '''
+        return self._visainstrument.ask('SYST:ERR?')
+
+##############################
+
     def do_get_IQresult(self):
         '''
         Get IQresult level from device in I/Q mode
@@ -535,9 +843,11 @@ class RS_FSL6(Instrument):
             None
 
         Output:
-            IQresult (string) : either REAL,32 or ASCII, depending on choice in init_IQ_measurement
+            IQresult (string) : either REAL,32 or ASCII, depending on choice 
+                                in init_IQ_measurement
         '''
-        logging.debug(__name__ + ' : reading result of I/Q measurement from instrument')
+        logging.debug(__name__ + 
+                ' : reading result of I/Q measurement from instrument')
         #self._visainstrument.write('INIT,*WAI')        
         #self._visainstrument.write('*CLS')
         self._visainstrument.write('INIT') 
@@ -545,7 +855,32 @@ class RS_FSL6(Instrument):
         #self._visainstrument.write('INIT,*WAI')        
         #return self._visainstrument.ask('TRAC:IQ:DATA:MEM? 0,4096')
 
-    def do_get_tracedata(self):
+    def do_get_IQ_sample_rate(self):
+        '''
+        Get the sample rate for the IQ demodulation
+        '''
+        logging.debug(__name__ + ' : reading the IQ measurement sample rate.')
+        return self._visainstrument.ask('TRAC:IQ:SRAT?')
+
+    def do_get_IQ_samples(self):
+        '''
+        Get the number of samples for the IQ demodulation
+        '''
+        logging.debug(__name__ + 
+            ' : reading the number of IQ measurement samples')
+        settings = self._visainstrument.ask('TRAC:IQ:SET?').split(',')
+        return int(settings[-1])
+
+    def do_get_IQ_pretrigger_samples(self):
+        '''
+        Get the number of pretrigger samples for the IQ demodulation
+        '''
+        logging.debug(__name__ + 
+            ' : reading the number of IQ measurement pretrigger samples')
+        settings = self._visainstrument.ask('TRAC:IQ:SET?').split(',')
+        return int(settings[-2])
+
+    def get_trace_data(self, trace_number=1):
         '''
         read out trace data from device
 
@@ -553,12 +888,16 @@ class RS_FSL6(Instrument):
             None
 
         Output:
-            tracedata (string) : either REAL,32 or ASCII, depending on choice 
+            trace_data (numpy array)
         '''
-        logging.debug(__name__ + ' : reading result of I/Q measurement from instrument')
-        self._visainstrument.write('INIT,*WAI')
-        #self._visainstrument.write('FORM ASC')      # ASCII file format, alternative: FORMat REAL,32 (binary file)
-        return self._visainstrument.ask('TRAC? TRACE1')
+        logging.debug(__name__ + 
+                    ' : reading result of I/Q measurement from instrument')
+#        self._visainstrument.write('INIT,*WAI')
+        self._visainstrument.write(
+                'TRAC?  TRACE{0:d}'.format(trace_number))
+        trace = self._visainstrument.read_raw() # header + data + termination
+        trace_start = 2 + int(trace[1]) # second character is header length
+        return frombuffer(trace[trace_start:-1], dtype=float32)
 
     def do_get_channel_power(self):
         '''
@@ -567,7 +906,7 @@ class RS_FSL6(Instrument):
         
         In measurement, call self.init_power_measurement() before reading channelpower!
 
-	    Documentation for remote control command in 'Operating manual', p. 821
+        Documentation for remote control command in 'Operating manual', p. 821
 
         Input:
             None
@@ -576,7 +915,8 @@ class RS_FSL6(Instrument):
             channel_power (float) : channel power in ??unit
         '''
         logging.debug(__name__ + ' : reading channel_power from instrument')
-        self._visainstrument.write('*WAI')    		# Starts a sweep and waits for the end of the sweep.
+        self._visainstrument.write('*WAI') # Starts a sweep and waits for 
+                                           # the end of the sweep.
         return float(self._visainstrument.ask('CALC:MARK:FUNC:POW:RES? ACP'))
 
     def do_get_timetracemarkerpower(self):
@@ -593,7 +933,9 @@ class RS_FSL6(Instrument):
         Output:
             timetracemarkerpower (float) : marker power in V!! (even if display shows dBuV)
         '''
-        logging.debug(__name__ + ' : reading marker power in zero span mode from instrument')
-        self._visainstrument.write('INIT;*WAI')    		# Starts a sweep and waits for the end of the sweep.
+        logging.debug(__name__ + 
+                ' : reading marker power in zero span mode from instrument')
+        self._visainstrument.write('INIT;*WAI') # Starts a sweep and waits for 
+                                                # the end of the sweep.
         return float(self._visainstrument.ask('CALC:MARK:FUNC:SUMM:PPE:RES?'))
 
