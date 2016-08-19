@@ -43,6 +43,11 @@ IF EXIST "%PYTHON_PATH%\scripts\ipython-script.py" (
     start Console -w "QTLab" -r "/k %PYTHON_PATH%\python.exe %PYTHON_PATH%\scripts\ipython-script.py --gui=gtk -i source/qtlab_shell.py -- %*"
     GOTO EOF
 )
+:: check if version >= ??
+IF EXIST "%PYTHON_PATH%\scripts\ipython.exe" (
+    start Console -w "QTLab" -r "/k %PYTHON_PATH%\scripts\ipython.exe --gui=gtk -i source/qtlab_shell.py -- %*"
+    GOTO EOF
+)
 
 echo Failed to run qtlab.bat
 pause

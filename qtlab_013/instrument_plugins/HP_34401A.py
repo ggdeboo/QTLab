@@ -79,10 +79,12 @@ class HP_34401A(Instrument):
         # Add some global constants
         self.__name__ = name
         self._address = address
-        self._visainstrument = visa.instrument(self._address)
-        self._visainstrument.timeout = 0.5
+
+        rm = visa.ResourceManager()
+        self._visainstrument = rm.open_resource(self._address)
+        self._visainstrument.timeout = 500 
         if self._visainstrument.interface_type == 4: # serial?
-            self._visainstrument.term_chars = '\n'
+            self._visainstrument.read_termination = '\r\n'
             self._visainstrument.write('SYST:REMOTE')
         self._modes = ['VOLT', 
                        'VOLT:AC', 
@@ -292,18 +294,18 @@ class HP_34401A(Instrument):
         Note that Readval is not updated since this triggers itself.
         '''
         if self._triggers_sent > 0:
-            reply = self._visainstrument.ask('FETCH?')
+            reply = self._visainstrument.query('FETCH?')
             if self._triggers_sent >= self._trigger_count:
                 self._wait_for_trigger = False
         else:
-            data_points = int(self._visainstrument.ask('DATA:POIN?'))
+            data_points = int(self._visainstrument.query('DATA:POIN?'))
             if data_points == 0:
                 # No triggers have been sent and there is no data in the buffer
                 logging.warning('No triggers have been sent yet and buffer' + 
                                 ' is empty.')
             else:
                 # No triggers have been sent, but the buffer is not empty
-                reply = self._visainstrument.ask('FETCH?')
+                reply = self._visainstrument.query('FETCH?')
         return float(reply[0:15])
 
     def set_mode_volt_ac(self): 
@@ -423,7 +425,7 @@ class HP_34401A(Instrument):
         '''
 
         logging.debug('Read current value')
-        text = self._visainstrument.ask('READ?')
+        text = self._visainstrument.query('READ?')
         self._trigger_count = 0
         text = re.sub('N.*','',text)
             
@@ -568,7 +570,7 @@ class HP_34401A(Instrument):
             count (int) : Trigger count
         '''
         logging.debug('Read trigger count from instrument')
-        ans = self._visainstrument.ask('TRIG:COUN?')
+        ans = self._visainstrument.query('TRIG:COUN?')
         try:
             ret = int(float(ans))
         except:
@@ -586,7 +588,7 @@ class HP_34401A(Instrument):
             sample_count (int) : sample count
         '''
         logging.debug(self.__name__ + 'Read the sample count from instrument')
-        ans = self._visainstrument.ask('SAMP:COUN?')
+        ans = self._visainstrument.query('SAMP:COUN?')
         return int(ans)
 
     def do_set_sample_count(self, val):
@@ -690,7 +692,7 @@ class HP_34401A(Instrument):
         '''
         string = 'SENS:FUNC?'
         logging.debug('Getting mode')
-        ans = self._visainstrument.ask(string)
+        ans = self._visainstrument.query(string)
         return ans.strip('"')
 
     def do_get_display(self):
@@ -705,7 +707,7 @@ class HP_34401A(Instrument):
             False= Off
         '''
         logging.debug('Reading the status of the display from instrument')
-        reply = self._visainstrument.ask('DISP?')
+        reply = self._visainstrument.query('DISP?')
         return bool(int(reply))
 
     def do_set_display(self, val):
@@ -734,7 +736,7 @@ class HP_34401A(Instrument):
             reply (boolean) : Autozero status.
         '''
         logging.debug('Reading autozero status from instrument')
-        reply = self._visainstrument.ask(':ZERO:AUTO?')
+        reply = self._visainstrument.query(':ZERO:AUTO?')
         return bool(int(reply))
 
     def do_set_autozero(self, val):
@@ -804,7 +806,7 @@ class HP_34401A(Instrument):
             'REAR'
         '''
         logging.debug('Getting the terminal used by %s.' %self.get_name())
-        reply = self._visainstrument.ask(':ROUT:TERM?')
+        reply = self._visainstrument.query(':ROUT:TERM?')
         if reply == 'FRON': # The source meter responds with 'FRON'
             logging.info('The terminal used by %s is FRONT.' %
                             (self.get_name())) 
@@ -876,8 +878,8 @@ class HP_34401A(Instrument):
         '''
         mode = self._determine_mode(mode)
         string = ':%s:%s?' % (mode, par)
-        ans = self._visainstrument.ask(string)
-        logging.debug('ask instrument for %s (result %s)' % \
+        ans = self._visainstrument.query(string)
+        logging.debug('query instrument for %s (result %s)' % \
             (string, ans))
         return ans
 
@@ -905,6 +907,6 @@ class HP_34401A(Instrument):
         '''
         Read out the last error message from the instrument.
         '''
-        message = self._visainstrument.ask('SYST:ERR?')
+        message = self._visainstrument.query('SYST:ERR?')
         return message
 
