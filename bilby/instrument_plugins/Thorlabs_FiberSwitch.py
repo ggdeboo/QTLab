@@ -19,7 +19,7 @@
 from instrument import Instrument
 from qt import msleep
 import logging
-from visa import SerialInstrument
+import visa
 import types
 
 class Thorlabs_FiberSwitch(Instrument):
@@ -38,9 +38,11 @@ class Thorlabs_FiberSwitch(Instrument):
     def __init__(self, name, address, wavemeter, reset=False):
         logging.debug('Initializing fiber switch on port %s.' % address)
         Instrument.__init__(self, name, tags=['physical'])
-        self._visainstrument = SerialInstrument(address)
+
+        rm = visa.ResourceManager()
+        self._visainstrument = rm.open_resource(address)
         self._visainstrument.baud_rate = 115200
-        self._visainstrument.term_chars = '\n'
+        self._visainstrument.write_termination = '\n'
 
         self.wait_time = 0.3
         self._wavemeter = wavemeter
@@ -86,35 +88,42 @@ class Thorlabs_FiberSwitch(Instrument):
 
 #### communication with machine
     def do_get_active_port(self):
-        return self._visainstrument.ask('S?')
+        logging.debug(__name__ + ' : Getting the active port.')        
+        return self._visainstrument.query ('S?')
 
     def do_set_active_port(self, port):
-        self._visainstrument.write('S %i' %port)
+        logging.debug(__name__ + ' : Setting the active port to {0}.'.format(
+            port))        
+        self._visainstrument.write('S {0:d}'.format(port))
         if self.get_active_port() == port:
             return True
         else:
             raise Warning('The switch did not reply with the expected port.')
 
     def do_get_port1_wavelength(self):
+        logging.debug(__name__ + ' : Getting the wavelength on port 1.')        
         if self.get_active_port() == 2:
             self.set_active_port(1)
             msleep(self.wait_time)
         return self._wavemeter.get_wavelength()
 
     def do_get_port2_wavelength(self):
+        logging.debug(__name__ + ' : Getting the wavelength on port 2.')        
         if self.get_active_port() == 1:
             self.set_active_port(2)
             msleep(self.wait_time)
         return self._wavemeter.get_wavelength()
 
     def do_get_port1_power(self):
-        if self.get_active_port()==2:
+        logging.debug(__name__ + ' : Getting the power on port 1.')        
+        if self.get_active_port() == 2:
             self.set_active_port(1)
             msleep(self.wait_time)
         return self._wavemeter.get_power()
 
     def do_get_port2_power(self):
-        if self.get_active_port()==1:
+        logging.debug(__name__ + ' : Getting the power on port 2.')        
+        if self.get_active_port() == 1:
             self.set_active_port(2)
             msleep(self.wait_time)
         return self._wavemeter.get_power()
