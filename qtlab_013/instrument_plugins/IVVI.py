@@ -2,7 +2,6 @@
 # Pieter de Groot <pieterdegroot@gmail.com>, 2008
 # Martijn Schaafsma <qtlab@mcschaafsma.nl>, 2008
 # Reinier Heeres <reinier@heeres.eu>, 2008
-# Gabriele de Boo <ggdeboo@gmail.com>, 2016
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -20,16 +19,10 @@
 
 from instrument import Instrument
 import types
-#import pyvisa.vpp43 as vpp43
 import visa
-from pyvisa import attributes, constants
 from time import sleep
 import logging
 import numpy
-#from lib import visafunc
-
-rm = visa.ResourceManager()
-vpp43 = rm.visalib
 
 class IVVI(Instrument):
     '''
@@ -129,25 +122,16 @@ class IVVI(Instrument):
             None
         '''
         logging.debug('Opening serial connection')
-        self._session = vpp43.open_default_resource_manager()[0]
-        self._vi = vpp43.open(self._session, self._address)[0]
 
-        vpp43.set_attribute(self._vi, 
-                            attributes.AttrVI_ATTR_ASRL_BAUD.attribute_id, 
-                            115200)
-        vpp43.set_attribute(self._vi, 
-                            attributes.AttrVI_ATTR_ASRL_DATA_BITS.attribute_id, 
-                            8)
-        vpp43.set_attribute(self._vi, 
-                            attributes.AttrVI_ATTR_ASRL_STOP_BITS.attribute_id,
-                            constants.StopBits.one)
-        vpp43.set_attribute(self._vi, 
-                            attributes.AttrVI_ATTR_ASRL_PARITY.attribute_id,
-                            constants.VI_ASRL_PAR_ODD)
-        vpp43.set_attribute(self._vi, 
-                            attributes.AttrVI_ATTR_ASRL_END_IN.attribute_id,
-                            constants.VI_ASRL_END_NONE)
+        RM = visa.ResourceManager()
+        self._visainstrument = RM.open_resource(self._address)
 
+        self._visainstrument.baud_rate = 115200
+        self._visainstrument.data_bits = 8
+        self._visainstrument.stop_bits = visa.constants.StopBits.one
+        self._visainstrument.parity    = visa.constants.Parity.odd
+        self._visainstrument.end_input = visa.constants.SerialTermination.none
+    
     # close serial connection
     def _close_serial_connection(self):
         '''
@@ -160,7 +144,7 @@ class IVVI(Instrument):
             None
         '''
         logging.debug('Closing serial connection')
-        vpp43.close(self._vi)
+#        vpp43.close(self._vi)
 
     def reset(self):
         '''
@@ -219,8 +203,7 @@ class IVVI(Instrument):
         '''
         values = range(self._numdacs)
         for i in range(self._numdacs):
-            values[i] = ((numbers[2 + 2*i]*256 + numbers[3 + 2*i])
-                /65535.0*4000.0) + self.pol_num[i]
+            values[i] = ((numbers[2 + 2*i]*256 + numbers[3 + 2*i])/65535.0*4000.0) + self.pol_num[i]
         return values
 
     # Communication with device
@@ -286,24 +269,19 @@ class IVVI(Instrument):
         logging.debug('Sending %r', message)
 
         # clear input buffer
-#        visafunc.read_all(self._vi)
-        vpp43.clear(self._vi)
-        vpp43.write(self._vi, message)
+        self._visainstrument.clear()
+        self._visainstrument.write_raw(message)
 
-# In stead of blocking, we could also poll, but it's a bit slower
-#        print visafunc.get_navail(self._vi)
-#        if not visafunc.wait_data(self._vi, 2, 0.5):
-#            logging.error('Failed to receive reply from IVVI rack')
-#            return False
-
-        data1 = vpp43.read(self._vi, 2)[0]
+        data1 = self._visainstrument.visalib.read(
+            self._visainstrument.session, 2)[0]
         data1 = [ord(s) for s in data1]
 
         # 0 = no error, 32 = watchdog reset
         if data1[1] not in (0, 32):
             logging.error('Error while reading: %s', data1)
 
-        data2 = vpp43.read(self._vi, data1[0] - 2)[0]
+        data2 = self._visainstrument.visalib.read(
+            self._visainstrument.session, data1[0] - 2)[0]
         data2 = [ord(s) for s in data2]
 
         return data1 + data2
