@@ -49,11 +49,13 @@ class RS_FSL6(Instrument):
         Instrument.__init__(self, name, tags=['physical'])
 
         self._address = address
-        self._visainstrument = visa.instrument(self._address)
-        self._visainstrument.timeout = 1
-        self._visainstrument.term_chars = '\n'
+        rm = visa.ResourceManager()
+        self._visainstrument = rm.open_resource(self._address)
+        self._visainstrument.read_termination = '\n'
+        self._visainstrument.timeout = 1000
 
-        self._installed_options = self._visainstrument.ask('*OPT?')
+
+        self._installed_options = self._visainstrument.query('*OPT?')
         bw_min = 300
 
         if 'B4' in self._installed_options:
@@ -472,7 +474,7 @@ class RS_FSL6(Instrument):
             center_frequency (float) : center frequency in Hz
         '''
         logging.debug(__name__ + ' : reading center frequency from instrument')
-        return float(self._visainstrument.ask('FREQ:CENT?'))
+        return float(self._visainstrument.query('FREQ:CENT?'))
 
     def do_set_center_frequency(self, center_frequency):
         '''
@@ -492,7 +494,7 @@ class RS_FSL6(Instrument):
         '''
         Get the resolution bandwidth
         '''
-        return float(self._visainstrument.ask('SENS:BWID:RES?'))
+        return float(self._visainstrument.query('SENS:BWID:RES?'))
 
     def do_get_sweep_mode(self):
         '''
@@ -500,7 +502,7 @@ class RS_FSL6(Instrument):
         measurements mode.
         '''
         logging.debug(__name__ + ' : getting the sweep mode.')
-        sweep_mode = self._visainstrument.ask('INIT:CONT?')
+        sweep_mode = self._visainstrument.query('INIT:CONT?')
         if sweep_mode == '0':
             return 'single'
         elif sweep_mode == '1':
@@ -525,7 +527,7 @@ class RS_FSL6(Instrument):
         Get the sweep count
         '''
         logging.debug(__name__ + ' : Getting the sweep count.')
-        return int(self._visainstrument.ask('SWE:COUN?'))
+        return int(self._visainstrument.query('SWE:COUN?'))
 
     def do_set_sweep_count(self, sweep_count):
         '''
@@ -540,7 +542,7 @@ class RS_FSL6(Instrument):
         Get the trigger level
         '''
         logging.debug(__name__ + ' : getting trigger level.')
-        return float(self._visainstrument.ask('TRIG:LEV?'))
+        return float(self._visainstrument.query('TRIG:LEV?'))
 
     def do_set_trigger_level(self, triggerlevel):
         '''
@@ -560,7 +562,7 @@ class RS_FSL6(Instrument):
         Get the holdoff time of the trigger
         '''
         logging.debug(__name__ + ' : getting the trigger delay.')
-        return float(self._visainstrument.ask('TRIG:HOLD?'))
+        return float(self._visainstrument.query('TRIG:HOLD?'))
 
     def do_set_trigger_delay(self, delay):
         '''
@@ -581,7 +583,7 @@ class RS_FSL6(Instrument):
         Get the source for the trigger
         '''
         logging.debug(__name__ + ' : getting the trigger source.')
-        return(self._visainstrument.ask('TRIG:SOUR?')) 
+        return(self._visainstrument.query('TRIG:SOUR?')) 
 
     def do_set_trigger_source(self, source):
         '''
@@ -602,7 +604,7 @@ class RS_FSL6(Instrument):
             span (float) : span in Hz
         '''
         logging.debug(__name__ + ' : reading span from instrument')
-        return float(self._visainstrument.ask('FREQ:SPAN?'))
+        return float(self._visainstrument.query('FREQ:SPAN?'))
 
     def do_set_span(self,span):
         '''
@@ -628,7 +630,7 @@ class RS_FSL6(Instrument):
             start_frequency (float) : spart frequency in Hz
         '''
         logging.debug(__name__ + ' : reading start frequency from instrument')
-        return float(self._visainstrument.ask('FREQ:STAR?'))
+        return float(self._visainstrument.query('FREQ:STAR?'))
 
     def do_get_stop_frequency(self):
         '''
@@ -641,7 +643,7 @@ class RS_FSL6(Instrument):
             stop_frequency (float) : spart frequency in Hz
         '''
         logging.debug(__name__ + ' : reading stop frequency from instrument')
-        return float(self._visainstrument.ask('FREQ:STOP?'))
+        return float(self._visainstrument.query('FREQ:STOP?'))
 
     def do_get_reference_level(self):
         '''
@@ -654,7 +656,7 @@ class RS_FSL6(Instrument):
             reference_level (float) : reference level in dBm
         '''
         logging.debug(__name__ + ' : reading reference level from instrument')
-        return float(self._visainstrument.ask('DISP:TRAC:Y:RLEV?'))
+        return float(self._visainstrument.query('DISP:TRAC:Y:RLEV?'))
 
     def do_set_reference_level(self, reference_level):
         '''
@@ -675,14 +677,14 @@ class RS_FSL6(Instrument):
         '''
         Get the input attenuation level
         '''
-        return float(self._visainstrument.ask('INP:ATT?'))
+        return float(self._visainstrument.query('INP:ATT?'))
 
     def do_get_input_impedance(self):
         '''
         Get the input impedance setting. The setting of 75 Ohm should only
         be used when a 25 Ohm resistor is placed in series with the input.
         '''
-        return int(self._visainstrument.ask('INP:IMP?'))
+        return int(self._visainstrument.query('INP:IMP?'))
 
     def do_get_preamp_status(self):
         '''
@@ -695,7 +697,7 @@ class RS_FSL6(Instrument):
             True:   preamp is on
             False:  preamp is off
         '''
-        status = self._visainstrument.ask('INP:GAIN:STAT?')
+        status = self._visainstrument.query('INP:GAIN:STAT?')
         if status == '1':
             return True
         elif status == '0':
@@ -715,7 +717,7 @@ class RS_FSL6(Instrument):
             sweep_time (float) : sweep time in s
         '''
         logging.debug(__name__ + ' : reading sweep time from instrument')
-        return float(self._visainstrument.ask('SWE:TIME?'))
+        return float(self._visainstrument.query('SWE:TIME?'))
 
     def do_set_sweep_time(self, sweep_time):
         '''
@@ -736,7 +738,7 @@ class RS_FSL6(Instrument):
         Get the number of points in a sweep
         '''
         logging.debug(__name__ + ' : getting the number of sweep points.')
-        return int(self._visainstrument.ask('SWE:POIN?'))
+        return int(self._visainstrument.query('SWE:POIN?'))
 
     def do_set_sweep_points(self, sweep_points):
         '''
@@ -760,7 +762,7 @@ class RS_FSL6(Instrument):
         '''
         logging.debug(__name__ + 
                     ' : Getting the reference oscillator')
-        return self._visainstrument.ask('ROSC:SOUR?')
+        return self._visainstrument.query('ROSC:SOUR?')
 
     def do_set_reference_oscillator(self, reference):
         '''
@@ -786,14 +788,14 @@ class RS_FSL6(Instrument):
         analyser
         '''
         logging.debug(__name__ + ' : getting the measurement mode.')
-        return self._visainstrument.ask('INST?')
+        return self._visainstrument.query('INST?')
 
     def do_get_trace_mode(self):
         '''
         Get the trace mode.
         '''
         logging.debug(__name__ + ' : getting the trace mode.')
-        return self._visainstrument.ask('DISP:TRAC:MODE?')
+        return self._visainstrument.query('DISP:TRAC:MODE?')
 
     def do_set_trace_mode(self, trace_mode):
         '''
@@ -808,7 +810,7 @@ class RS_FSL6(Instrument):
         Get the detector mode.
         '''
         logging.debug(__name__ + ' : getting the detector mode.')
-        return self._visainstrument.ask('DET?')
+        return self._visainstrument.query('DET?')
 
     def do_set_detector_mode(self, detector_mode):
         '''
@@ -831,7 +833,7 @@ class RS_FSL6(Instrument):
         '''
         Queries the earliest error queue entry and deletes it
         '''
-        return self._visainstrument.ask('SYST:ERR?')
+        return self._visainstrument.query('SYST:ERR?')
 
 ##############################
 
@@ -851,16 +853,16 @@ class RS_FSL6(Instrument):
         #self._visainstrument.write('INIT,*WAI')        
         #self._visainstrument.write('*CLS')
         self._visainstrument.write('INIT') 
-        return self._visainstrument.ask('TRAC:IQ:DATA?')
+        return self._visainstrument.query('TRAC:IQ:DATA?')
         #self._visainstrument.write('INIT,*WAI')        
-        #return self._visainstrument.ask('TRAC:IQ:DATA:MEM? 0,4096')
+        #return self._visainstrument.query('TRAC:IQ:DATA:MEM? 0,4096')
 
     def do_get_IQ_sample_rate(self):
         '''
         Get the sample rate for the IQ demodulation
         '''
         logging.debug(__name__ + ' : reading the IQ measurement sample rate.')
-        return self._visainstrument.ask('TRAC:IQ:SRAT?')
+        return self._visainstrument.query('TRAC:IQ:SRAT?')
 
     def do_get_IQ_samples(self):
         '''
@@ -868,7 +870,7 @@ class RS_FSL6(Instrument):
         '''
         logging.debug(__name__ + 
             ' : reading the number of IQ measurement samples')
-        settings = self._visainstrument.ask('TRAC:IQ:SET?').split(',')
+        settings = self._visainstrument.query('TRAC:IQ:SET?').split(',')
         return int(settings[-1])
 
     def do_get_IQ_pretrigger_samples(self):
@@ -877,7 +879,7 @@ class RS_FSL6(Instrument):
         '''
         logging.debug(__name__ + 
             ' : reading the number of IQ measurement pretrigger samples')
-        settings = self._visainstrument.ask('TRAC:IQ:SET?').split(',')
+        settings = self._visainstrument.query('TRAC:IQ:SET?').split(',')
         return int(settings[-2])
 
     def get_trace_data(self, trace_number=1):
@@ -917,7 +919,7 @@ class RS_FSL6(Instrument):
         logging.debug(__name__ + ' : reading channel_power from instrument')
         self._visainstrument.write('*WAI') # Starts a sweep and waits for 
                                            # the end of the sweep.
-        return float(self._visainstrument.ask('CALC:MARK:FUNC:POW:RES? ACP'))
+        return float(self._visainstrument.query('CALC:MARK:FUNC:POW:RES? ACP'))
 
     def do_get_timetracemarkerpower(self):
         '''
@@ -937,5 +939,5 @@ class RS_FSL6(Instrument):
                 ' : reading marker power in zero span mode from instrument')
         self._visainstrument.write('INIT;*WAI') # Starts a sweep and waits for 
                                                 # the end of the sweep.
-        return float(self._visainstrument.ask('CALC:MARK:FUNC:SUMM:PPE:RES?'))
+        return float(self._visainstrument.query('CALC:MARK:FUNC:SUMM:PPE:RES?'))
 
