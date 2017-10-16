@@ -45,10 +45,13 @@ class JDSU_SWS15101(Instrument):
 
         # Add some global constants
         self._address = address
-        self._visainstrument = visa.instrument(self._address)
+
+        rm = visa.ResourceManager()
+        self._visainstrument = rm.open_resource(self._address)
         if self._visainstrument.interface_type == 4:
             print('The JDSU laser is connected with the serial interface.')
-            self._visainstrument.term_chars = '\r'
+            self._visainstrument.write_termination = '\r'
+            self._visainstrument.read_termination = '\r'
             self._visainstrument.baud_rate = 9600
         self._visainstrument.clear()
 
@@ -134,7 +137,7 @@ class JDSU_SWS15101(Instrument):
 # Make sure that the information in buffer has been read out.
         if self._visainstrument.interface_type == 4:
             # Serial communication
-            response = self._visainstrument.ask('P?')
+            response = self._visainstrument.query('P?')
             response = response.lstrip('> ')
             if response.startswith('P='):
                 return float(response.lstrip('P='))
@@ -195,7 +198,7 @@ class JDSU_SWS15101(Instrument):
 
         if self._visainstrument.interface_type == 4:
             # Serial communication
-            response = self._visainstrument.ask('I?')
+            response = self._visainstrument.query('I?')
             response = response.lstrip('> ')
             if response.startswith('I='):
                 return float(response.lstrip('I='))
@@ -258,7 +261,7 @@ class JDSU_SWS15101(Instrument):
 
         if self._visainstrument.interface_type == 4:
             # Serial communication
-            response = self._visainstrument.ask('L?')
+            response = self._visainstrument.query('L?')
             response = response.lstrip('> ')
             if response.startswith('L='):
                 return float(response.lstrip('L='))
@@ -303,7 +306,7 @@ class JDSU_SWS15101(Instrument):
         logging.debug(__name__ + ': Getting the optical frequency.')
         if self._visainstrument.interface_type == 4:
             # Serial communication
-            response = self._visainstrument.ask('f?')
+            response = self._visainstrument.query('f?')
             response = response.lstrip('> ')
             if response.startswith('f='):
                 return float(response.lstrip('f='))
@@ -311,7 +314,7 @@ class JDSU_SWS15101(Instrument):
                 logging.error(__name__ + 
                 ' get_power : incorrect response: %s' % response)
         else:
-            response = self._visainstrument.ask('f?')
+            response = self._visainstrument.query('f?')
             return float(response.lstrip('f='))
 
     def do_set_wavelength(self, wavel):
@@ -381,7 +384,7 @@ class JDSU_SWS15101(Instrument):
         logging.debug(__name__ + ' : get current limited')
         if self._visainstrument.interface_type == 4:
             # Serial communication
-            response = self._visainstrument.ask('LIMIT?')
+            response = self._visainstrument.query('LIMIT?')
             response = response.lstrip('> ')
             if response == 'YES':
                 return True
@@ -392,7 +395,7 @@ class JDSU_SWS15101(Instrument):
                 ' get_power : incorrect response: %s' % response)
         else:
             # GPIB communication
-            response = self._visainstrument.ask('f?')
+            response = self._visainstrument.query('f?')
             if response == 'YES':
                 return True
             elif response == 'NO':

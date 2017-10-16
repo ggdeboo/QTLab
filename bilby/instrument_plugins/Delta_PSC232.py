@@ -20,9 +20,15 @@ import types
 import visa
 import logging
 from time import sleep
+import qt
 
 class Delta_PSC232(Instrument):
+    '''
+    Wrapper to communicate with the Delta PSC232 power supply controller
 
+    For a list of available commands write 'Help?' to the instrument
+    For a list of available errors write 'Err?' to the instrument
+    '''
     def __init__(self, 
                 name, 
                 address=None, 
@@ -42,9 +48,18 @@ class Delta_PSC232(Instrument):
         self.mincurrent_list = mincurrent_list
         self.maxcurrent_list = maxcurrent_list
 
-        self._visains = visa.instrument(address) #, term_chars = "\n\r\x04") # Hoo Rah
+        rm = visa.ResourceManager()
+        self._visains = rm.open_resource(address,
+                                         read_termination = '\n\r\x04') 
         self._visains.baud_rate = 4800
-        self._visains.timeout = 0.2
+        self._visains.timeout = 500 
+        self._visains.write_termination = '\n\r'
+
+        # The controller ends its messages with \n\r\x04, but when it reads
+        # messages it wants to read \n\r. With the \x04 it complains about
+        # receiving an unknown command.
+
+#        self._visains.term_chars = '\n\r\x04'
         self._visains.clear()
         # identification
         self._idn = []
@@ -52,9 +67,10 @@ class Delta_PSC232(Instrument):
         for idx, ch in enumerate(channel_list):
             self._idn.append('')
             self._visains.write('CH %i' % ch)
-            self._idn[idx] += self._check_response(self._visains.ask('*IDN?'))
-            self._idn[idx] += self._check_response(self._visains.read())
-            self._idn[idx] += self._check_response(self._visains.read())
+            qt.msleep(0.1)
+            self._idn[idx] += self._check_response(self._visains.query('*IDN?'))
+#            self._idn[idx] += self._check_response(self._visains.read())
+#            self._idn[idx] += self._check_response(self._visains.read())
         print self._idn
         
         self.add_parameter('minimum_voltage', type=types.FloatType,
@@ -102,7 +118,7 @@ class Delta_PSC232(Instrument):
                     units='A',
                     channel_prefix='ch%s_')
         self.add_parameter('active_channel', type=types.IntType,
-                        flags=Instrument.FLAG_GET)
+                        flags=Instrument.FLAG_GETSET | Instrument.FLAG_SOFTGET)
 
         for idx, ch in enumerate(channel_list):
             self.set_parameter_options('ch%i_voltage' % ch,
@@ -153,7 +169,7 @@ class Delta_PSC232(Instrument):
         '''Not sure whether this works properly
         Instrument doesn't seem to recognize *RST
         '''
-        self._visains.write('CH %i' % channel)
+        self._visains.write('CH {0:d}'.format(channel))
         self._visains.write('*RST')
 
     def do_set_minimum_voltage(self, minvol, channel):
@@ -162,7 +178,7 @@ class Delta_PSC232(Instrument):
         This is a device specific parameter that is used to define the range
         that the instrument controls. Use this only to set up the instrument. 
         '''
-        self._visains.write('CH %i' % channel)
+        self.set_active_channel(channel)
         self._visains.write("SOUR:VOLT:MIN %.3f" % minvol)
 
     def do_set_maximum_voltage(self, maxvol, channel):    
@@ -171,7 +187,7 @@ class Delta_PSC232(Instrument):
         This is a device specific parameter that is used to define the range
         that the instrument controls. Use this only to set up the instrument. 
         '''
-        self._visains.write('CH %i' % channel)
+        self.set_active_channel(channel)
         self._visains.write("SOUR:VOLT:MAX %.3f" % maxvol)
 
     def do_set_minimum_current(self, mincur, channel):
@@ -180,7 +196,7 @@ class Delta_PSC232(Instrument):
         This is a device specific parameter that is used to define the range
         that the instrument controls. Use this only to set up the instrument. 
         '''
-        self._visains.write('CH %i' % channel)
+        self.set_active_channel(channel)
         self._visains.write("SOUR:CURR:MIN %.3f" % mincur)
 
     def do_set_maximum_current(self, maxcur, channel):        
@@ -189,43 +205,61 @@ class Delta_PSC232(Instrument):
         This is a device specific parameter that is used to define the range
         that the instrument controls. Use this only to set up the instrument. 
         '''
-        self._visains.write('CH %i' % channel)
+        self.set_active_channel(channel)
         self._visains.write("SOUR:CURR:MAX %.3f" % maxcur)
 
     def do_set_voltage(self, V, channel):
         '''Set the output voltage of the power supply'''
-        self._visains.write('CH %i' % channel)
-        self._visains.write("SOU:VOLT %.3f" % V)
+        self.set_active_channel(channel)
+        self._visains.write("SOU:VOLT {0:.3f}".format(V))
 
     def do_set_current(self, I, channel):
         '''Set the output current of the power supply'''
-        self._visains.write('CH %i' % channel)
-        self._visains.write("SOU:CURR %.3f" % I)
+        self.set_active_channel(channel)
+        self._visains.write("SOU:CURR {0:.3f}".format(I))
 
     def do_get_voltage_measured(self, channel):
-#        return self._remove_EOT(self._visains.ask("MEAS:VOLT?"))
-#        with self.controlled_communication:
-        self._visains.write('CH %i' % channel)
-        response = self._visains.ask("MEAS:VOLT?")
-        return float(response.lstrip('\x04'))
+        self.set_active_channel(channel)
+        response = self._check_response(self._visains.query("MEAS:VOLT?"))
+        return float(response)
 
     def do_get_current_measured(self, channel):
         logging.debug(__name__ + 'Get the measured current.')
-#        with self.controlled_communication:
-        self._visains.write('CH %i' % channel)
-        response = self._visains.ask("MEAS:CURR?")
-        return float(response.lstrip('\x04'))
+        self.set_active_channel(channel)
+        response = self._check_response(self._visains.query("MEAS:CURR?"))
+        return float(response)
 
     def do_get_active_channel(self):
-        response = self._visains.ask("CH?")
-        return int(response.lstrip('\x04'))
+        response = self._check_response(self._visains.querquery("CH?"))
+        return int(response)
+
+    def do_set_active_channel(self, channel):
+        '''Set the active channel for communication
+
+        If there is no wait after changing the channel, the controller could
+        lock up. If it does it needs to be power cycled.
+        '''
+        if self.get_active_channel() != channel:
+            self._visains.write("CH {0:d}".format(channel))
+            qt.msleep(.1)
+        else:
+            logging.debug('Active channel already is {0:d}'.format(channel))
 
     def _check_response(self, response):
         '''Check the response for error messages'''
-        response = response.lstrip('\x04')
-        if response.lstrip(' ').startswith('unknown command !'):
+        if 'unknown command !' in response:
             logging.warning('Instrument replied with unknown command')
             new_response = self._check_response(self._visains.read())
             return new_response
+        elif 'error max current range' in response:
+            logging.warning('Instrument replied: {0}'.format(response))
+            logging.warning('The maximum current has not been set yet.')
+            # Need to set max current range?
+        elif 'error max voltage range' in response:
+            logging.warning('Instrument replied: {0}'.format(response))
+            logging.warning('The maximum voltage has not been set yet.')
+        if 'COMMAND LIST' in response:
+            logging.info('We got a command list as the response.')
+            self._visains.read()
         return response
 

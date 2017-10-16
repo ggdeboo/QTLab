@@ -17,10 +17,12 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 from instrument import Instrument
-from visa import instrument
+import visa
 import types
 import logging
 from time import sleep
+
+rm = visa.ResourceManager()
 
 class HP_3325B(Instrument):
     '''
@@ -50,16 +52,17 @@ class HP_3325B(Instrument):
         Instrument.__init__(self, name, tags=['physical'])
 
         self._address = address
-        self._visainstrument = instrument(self._address)
+        self._visainstrument = rm.open_resource(self._address)
         self._visainstrument.baud_rate = baud_rate
-        self._visainstrument.term_chars = '\n'
+        self._visainstrument.write_termination = '\n'
+        self._visainstrument.read_termination = '\r\n'
         self._visainstrument.clear()
-        self._idn = self._visainstrument.ask('*IDN?')
+        self._idn = self._visainstrument.query('*IDN?')
         self._serial_number = self._idn.split(',')[2]
         self._visainstrument.write('HEAD 1') # make sure the instrument sends
                                              # a head back after a command.
         # Query the options
-        options = self._visainstrument.ask('OPT?')
+        options = self._visainstrument.query('OPT?')
         self._instrument_options = []
         if options.lstrip('OPT')[0] == '1':
             self._instrument_options.append('oven')
@@ -222,7 +225,7 @@ class HP_3325B(Instrument):
 
     def do_get_frequency(self):
         logging.debug(__name__ + ' : Getting frequency')
-        response = self._visainstrument.ask('IFR')
+        response = self._visainstrument.query('IFR')
         if response.startswith('FR'):
             response = response.lstrip('FR')
             if response[-2:] == 'HZ':
@@ -241,6 +244,7 @@ class HP_3325B(Instrument):
                                 % response)
 
     def do_set_amplitude(self, amp):
+        '''Set the output amplitude in Vpp'''
         logging.debug(__name__ + ' : Setting amplitude')
         self._visainstrument.write('AM%5.6fVO' % amp)
 
@@ -249,7 +253,7 @@ class HP_3325B(Instrument):
         Gets the amplitude in V.
         '''
         logging.debug(__name__ + ' : Getting amplitude')
-        response = self._visainstrument.ask('IAM')
+        response = self._visainstrument.query('IAM')
         if not response.startswith('AM'):
             logging.warning(__name__ + ' get_amplitude : Wrong response: %s' % response)
             raise ValueError('Response from instrument was wrong.')
@@ -270,7 +274,7 @@ class HP_3325B(Instrument):
         Gets the amplitude in V.
         '''
         logging.debug(__name__ + ' : Getting amplitude')
-        response = self._visainstrument.ask('IOF')
+        response = self._visainstrument.query('IOF')
         if not response.startswith('OF'):
             logging.warning(__name__ + ' : Wrong response.')
             raise ValueError('Response from instrument was wrong.')
@@ -282,7 +286,7 @@ class HP_3325B(Instrument):
 
     def do_get_phase(self):
         '''Get the phase of the output signal.'''
-        response = self._visainstrument.ask('PH?')
+        response = self._visainstrument.query('PH?')
         if response.startswith('PH'):
             phase = float(response.lstrip('PH').rstrip('DE'))
             return phase
@@ -296,7 +300,7 @@ class HP_3325B(Instrument):
 
     def do_get_connected_output(self):
         logging.debug(__name__ + ' : Getting which output is connected.')
-        response = self._visainstrument.ask('IRF')
+        response = self._visainstrument.query('IRF')
         if response == 'RF1':
             return 'front'
         elif response == 'RF2':
@@ -328,7 +332,7 @@ class HP_3325B(Instrument):
             'negative ramp'
         '''
         logging.debug(__name__ + ' : Getting the waveform function.')
-        response = self._visainstrument.ask('IFU')
+        response = self._visainstrument.query('IFU')
         if not response.startswith('FU'):
             logging.warning(__name__ + ' : Wrong response.')
             raise ValueError('Response from instrument was wrong.')
@@ -377,7 +381,7 @@ class HP_3325B(Instrument):
         Returns True or False
         '''
         logging.debug(__name__ + ' : Getting the amplitude modulation status.')
-        response = self._visainstrument.ask('IMA')
+        response = self._visainstrument.query('IMA')
         if not response.startswith('MA'):
             logging.warning(__name__ + ' : Wrong response.')
             raise ValueError('Response from instrument was wrong.')
@@ -399,7 +403,7 @@ class HP_3325B(Instrument):
         6   64      RQS     This corresponds to the HP-IB SRQ signal
         7   128     BUSY    Set while a command is being executed
         '''
-        response = self._visainstrument.ask('QSTB?')
+        response = self._visainstrument.query('QSTB?')
         if response.startswith('QSTB'):
             return int(response.lstrip('QSTB'))
         else:
@@ -408,7 +412,7 @@ class HP_3325B(Instrument):
 
     def do_get_enhancements_mode(self):
         '''Get whether the instrument is in enhancements mode''' 
-        response = self._visainstrument.ask('ENH?')
+        response = self._visainstrument.query('ENH?')
         if response.startswith('ENH'):
             if response.lstrip('ENH') == '1':
                 return True
@@ -420,7 +424,7 @@ class HP_3325B(Instrument):
 
     def do_get_locked_to_external_reference(self):
         '''Get whether the oscillator is locked to an external input'''
-        response = self._visainstrument.ask('EXTR?')
+        response = self._visainstrument.query('EXTR?')
         if response.startswith('EXTR'):
             if response.lstrip('EXTR') == '1':
                 return True
@@ -433,7 +437,7 @@ class HP_3325B(Instrument):
 
     def do_get_modulation_source_amplitude(self):
         '''Get the amplitude of the modulation source'''
-        response = self._visainstrument.ask('MOAM?')
+        response = self._visainstrument.query('MOAM?')
         value = response.lstrip('MOAM')[:-2]
         units = response[-2:]
 #        if units == 'VO':
@@ -441,7 +445,7 @@ class HP_3325B(Instrument):
 
     def do_get_modulation_source_frequency(self):
         '''Get the frequency of the modulation source'''
-        response = self._visainstrument.ask('MOFR?')
+        response = self._visainstrument.query('MOFR?')
         if response.startswith('MOFR'):
             value = float(response.lstrip('MOFR').rstrip('HZ'))
             return value
@@ -452,7 +456,7 @@ class HP_3325B(Instrument):
 
     def do_get_modulation_source_waveform(self):
         '''Get the waveform function of the modulation source'''
-        response = self._visainstrument.ask('MOFU?')
+        response = self._visainstrument.query('MOFU?')
         if response.startswith('MOFU'):
             value = response.lstrip('MOFU')
             if value == '0':
@@ -474,7 +478,7 @@ class HP_3325B(Instrument):
 
     def do_get_phase_modulation_status(self):
         '''Get whether the phase modulation is enabled or not.'''
-        response = self._visainstrument.ask('MP?')
+        response = self._visainstrument.query('MP?')
         if response.startswith('MP'):
             if response.lstrip('MP') == '0':
                 return False
@@ -486,7 +490,7 @@ class HP_3325B(Instrument):
 
     def do_get_sweep_mode(self):
         '''Get the sweep mode of the signal generator'''
-        response = self._visainstrument.ask('SM?')
+        response = self._visainstrument.query('SM?')
         if response == 'SM1':
             return 'linear'
         elif response == 'SM2':
@@ -500,7 +504,7 @@ class HP_3325B(Instrument):
 
     def do_get_sweep_start_frequency(self):
         '''Get the frequency at which the sweep starts'''
-        response = self._visainstrument.ask('ST?')
+        response = self._visainstrument.query('ST?')
         if response.startswith('ST'):
             return float(response.lstrip('ST').rstrip('HZ'))
         else:
@@ -510,7 +514,7 @@ class HP_3325B(Instrument):
             
     def do_get_sweep_stop_frequency(self):
         '''Get the frequency at which the sweep stops'''
-        response = self._visainstrument.ask('SP?')
+        response = self._visainstrument.query('SP?')
         if response.startswith('SP'):
             return float(response.lstrip('SP').rstrip('HZ'))
         else:
@@ -520,7 +524,7 @@ class HP_3325B(Instrument):
 
     def do_get_sweep_time(self):
         '''Get the sweep time'''
-        response = self._visainstrument.ask('TI?')
+        response = self._visainstrument.query('TI?')
         if response.startswith('TI'):
             return float(response.lstrip('TI').rstrip('SE'))
         else:
@@ -593,5 +597,5 @@ class HP_3325B(Instrument):
             'ERR812' : 'RS-232 frame error',
             'ERR900' : 'Option not installed'
                      }
-        response = self._visainstrument.ask('ERR?')
+        response = self._visainstrument.query('ERR?')
         return error_dict.get(response, response)
