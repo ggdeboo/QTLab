@@ -17,7 +17,7 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 from instrument import Instrument
-import visa
+from visa import ResourceManager
 import types
 import logging
 import time
@@ -49,7 +49,12 @@ class SRS_SR830(Instrument):
         logging.info(__name__ + ' : Initializing instrument')
         Instrument.__init__(self, name, tags=['physical'])
         self._address = address
-        self._visainstrument = visa.instrument(self._address)
+        rm = ResourceManager()
+        self._visainstrument = rm.open_resource(self._address)
+#        if self._visainstrument.interface_type == 4:
+        self._visainstrument.read_termination = '\r'
+        self._visainstrument.write_termination = '\r'
+        print('{0}'.format(self._visainstrument.query('*IDN?')))
 
         self.add_parameter('mode',
            flags=Instrument.FLAG_SET,
@@ -68,8 +73,10 @@ class SRS_SR830(Instrument):
             flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET,
             minval=0.000, maxval=5.0,
             units='V', format='%.04e',maxstep=.1, stepdelay=50)
-        self.add_parameter('X', flags=Instrument.FLAG_GET, units='V', type=types.FloatType)
-        self.add_parameter('Y', flags=Instrument.FLAG_GET, units='V', type=types.FloatType)
+        self.add_parameter('X', flags=Instrument.FLAG_GET, units='V', 
+                            type=types.FloatType)
+        self.add_parameter('Y', flags=Instrument.FLAG_GET, units='V', 
+                            type=types.FloatType)
         self.add_parameter('R', flags=Instrument.FLAG_GET, units='V', type=types.FloatType)
         self.add_parameter('P', flags=Instrument.FLAG_GET, units='deg', type=types.FloatType)
         self.add_parameter('tau', type=types.IntType,
@@ -309,6 +316,8 @@ class SRS_SR830(Instrument):
             2 : "Y",
             3 : "R"
             4 : "P"
+        Output:
+            readvalue (float) : output in V or degrees
 
         '''
         parameters = {
@@ -317,7 +326,6 @@ class SRS_SR830(Instrument):
         3 : "R",
         4 : "P"
         }
-        self.direct_output()
         if parameters.__contains__(output):
             #logging.info(__name__ + ' : Reading parameter from instrument: %s ' %parameters.get(output))
             if ovl:
@@ -381,7 +389,6 @@ class SRS_SR830(Instrument):
         Output:
             frequency (float) : frequency in Hz
         '''
-        self.direct_output()
         logging.debug(__name__ + ' : reading frequency from instrument')
         return float(self._visainstrument.ask('FREQ?'))
 
@@ -395,7 +402,6 @@ class SRS_SR830(Instrument):
         Output:
             frequency (float) : frequency in Hz
         '''
-        self.direct_output()
         logging.debug(__name__ + ' : reading frequency from instrument')
         return float(self._visainstrument.ask('SLVL?'))
 
@@ -429,7 +435,6 @@ class SRS_SR830(Instrument):
             None
         '''
 
-        self.direct_output()
         logging.debug(__name__ + ' : setting time constant on instrument to %s'%(timeconstant))
         self._visainstrument.write('OFLT %s' % timeconstant)
 
@@ -443,7 +448,6 @@ class SRS_SR830(Instrument):
             time constant (integer) : integer from 0 to 19
         '''
 
-        self.direct_output()
         logging.debug(__name__ + ' : getting time constant on instrument')
         return float(self._visainstrument.ask('OFLT?'))
 
@@ -458,7 +462,6 @@ class SRS_SR830(Instrument):
             None
         '''
 
-        self.direct_output()
         logging.debug(__name__ + ' : setting sensitivity on instrument to %s'%(sens))
         self._visainstrument.write('SENS %d' % sens)
 
@@ -468,7 +471,6 @@ class SRS_SR830(Instrument):
             Output:
             sensitivity (integer) : integer from 0 to 26
         '''
-        self.direct_output()
         logging.debug(__name__ + ' : reading sensitivity from instrument')
         return float(self._visainstrument.ask('SENS?'))
 
@@ -482,7 +484,6 @@ class SRS_SR830(Instrument):
         Output:
             phase (float) : reference phase shit in degree
         '''
-        self.direct_output()
         logging.debug(__name__ + ' : reading frequency from instrument')
         return float(self._visainstrument.ask('PHAS?'))
 
