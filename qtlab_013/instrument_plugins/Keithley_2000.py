@@ -74,7 +74,9 @@ class Keithley_2000(Instrument):
 
         # Add some global constants
         self._address = address
-        self._visainstrument = visa.instrument(self._address)
+        RM = visa.ResourceManager()
+        self._visainstrument = RM.open_resource(self._address)
+        self._visainstrument.read_termination = '\n'
         if self._visainstrument.interface_type == 4:
             self._visainstrument.baud_rate = 19200
             self._visainstrument.term_chars = '\r'
@@ -309,7 +311,7 @@ class Keithley_2000(Instrument):
         trigger_status = self.get_trigger_continuous(query=False)
         if self._trigger_sent and (not trigger_status):
             logging.debug('Fetching data')
-            reply = self._visainstrument.ask('FETCH?')
+            reply = self._visainstrument.query('FETCH?')
             self._trigger_sent = False
             return float(reply[0:15])
         elif (not self._trigger_sent) and (not trigger_status):
@@ -492,7 +494,7 @@ class Keithley_2000(Instrument):
             return float(0)
         self._trigger_sent = False
 
-        text = self._visainstrument.ask('DATA:FRESH?')
+        text = self._visainstrument.query('DATA:FRESH?')
             # Changed the query to from Data?
             # to Data:FRESH? so it will actually wait for the
             # measurement to finish.
@@ -517,7 +519,7 @@ class Keithley_2000(Instrument):
         '''
         logging.debug('Read last value')
 
-        text = self._visainstrument.ask('DATA?')
+        text = self._visainstrument.query('DATA?')
         return float(text[0:15])
 
     def do_get_readval(self, ignore_error=False):
@@ -543,7 +545,7 @@ class Keithley_2000(Instrument):
             return float(text[0:15])
         elif not trigger_status:
             logging.debug('Read current value')
-            text = self._visainstrument.ask('READ?')
+            text = self._visainstrument.query('READ?')
             self._trigger_sent = False
             return float(text[0:15])
         else:
@@ -847,7 +849,7 @@ class Keithley_2000(Instrument):
         '''
         string = 'SENS:FUNC?'
         logging.debug('Getting mode')
-        ans = self._visainstrument.ask(string)
+        ans = self._visainstrument.query(string)
         return ans.strip('"')
 
     def do_get_display(self):
@@ -862,7 +864,7 @@ class Keithley_2000(Instrument):
             False= Off
         '''
         logging.debug('Reading display from instrument')
-        reply = self._visainstrument.ask('DISP:ENAB?')
+        reply = self._visainstrument.query('DISP:ENAB?')
         return bool(int(reply))
 
     def do_set_display(self, val):
@@ -890,7 +892,7 @@ class Keithley_2000(Instrument):
             reply (boolean) : Autozero status.
         '''
         logging.debug('Reading autozero status from instrument')
-        reply = self._visainstrument.ask(':ZERO:AUTO?')
+        reply = self._visainstrument.query(':ZERO:AUTO?')
         return bool(int(reply))
 
     def do_set_autozero(self, val):
@@ -1099,8 +1101,8 @@ class Keithley_2000(Instrument):
         '''
         mode = self._determine_mode(mode)
         string = ':%s:%s?' % (mode, par)
-        ans = self._visainstrument.ask(string)
-        logging.debug('ask instrument for %s (result %s)' % \
+        ans = self._visainstrument.query(string)
+        logging.debug('query instrument for %s (result %s)' % \
             (string, ans))
         return ans
 
@@ -1155,7 +1157,7 @@ class Keithley_2000(Instrument):
     def do_get_buffer_size(self):
         '''
         '''
-        buffer_size = int(self._visainstrument.ask('TRAC:POIN?'))
+        buffer_size = int(self._visainstrument.query('TRAC:POIN?'))
         return buffer_size
 
     def do_set_buffer_size(self, buffer_size):
@@ -1176,7 +1178,7 @@ class Keithley_2000(Instrument):
         Returns a numpy array
         '''
         self._visainstrument.timeout = 4
-        trace_data = self._visainstrument.ask(':TRAC:DATA?')
+        trace_data = self._visainstrument.query(':TRAC:DATA?')
         self._visainstrument.timeout = 1
         trace = numpy.fromstring(trace_data, sep=',')
         if (len(trace) == 1) and (trace[0] == -1.0):

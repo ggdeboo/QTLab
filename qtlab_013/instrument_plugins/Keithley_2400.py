@@ -28,7 +28,7 @@ class Keithley_2400(Instrument):
     '''
     This is the driver for the Keithley 2400 Source Meter
 
-    Usage:
+    Usage:  
     Initialize with
     <name> = instruments.create('<name>', 'Keithley_2400',
         address='<GBIP address>',
@@ -52,10 +52,13 @@ class Keithley_2400(Instrument):
 
         # Add some global constants and set up visa instrument
         self._address = address
-        self._visainstrument = visa.instrument(self._address)
+        RM = visa.ResourceManager()
+        self._visainstrument = RM.open_resource(self._address)
+        self._visainstrument.read_termination = '\n'
+
         self._visainstrument.clear()
-        self._visainstrument.delay = 20e-3
-        self._visainstrument.timeout = 1
+        #self._visainstrument.query_delay = 20
+        #self._visainstrument.timeout = 1000
         
         self.add_parameter('source_voltage',
             type=types.FloatType,
@@ -261,7 +264,7 @@ class Keithley_2400(Instrument):
             'REAR'
         '''
         logging.debug('Getting the terminal used by %s.' %self.get_name())
-        reply = self._visainstrument.ask(':ROUT:TERM?')
+        reply = self._visainstrument.query(':ROUT:TERM?')
         if reply == 'FRON': # The source meter responds with 'FRON'
             logging.info('The terminal used by %s is FRONT.' %(self.get_name())) 
             return 'FRONT'
@@ -298,7 +301,7 @@ class Keithley_2400(Instrument):
             'memory'
         '''
         logging.debug('Getting source function mode.')
-        reply = self._visainstrument.ask(':SOUR:FUNC:MODE?')
+        reply = self._visainstrument.query(':SOUR:FUNC:MODE?')
         if reply == 'VOLT':
             logging.info('Source function of %s is voltage.' % self.get_name())
             return 'voltage'
@@ -338,7 +341,7 @@ class Keithley_2400(Instrument):
             'resistance'
         '''
         logging.debug('Getting measurement function.')
-        reply = self._visainstrument.ask(':SENS:FUNC:ON?')
+        reply = self._visainstrument.query(':SENS:FUNC:ON?')
         if 'VOLT' in reply:
             logging.info('Measurement function of %s is voltage.' % self.get_name())
             return 'voltage'
@@ -364,7 +367,7 @@ class Keithley_2400(Instrument):
             'sweep'
         '''
         logging.debug('Getting voltage sourcing mode.')
-        reply = self._visainstrument.ask('SOUR:VOLT:MODE?')
+        reply = self._visainstrument.query('SOUR:VOLT:MODE?')
         if reply == 'FIX':
             logging.info('Voltage sourcing mode of %s is fixed.' % self.get_name())
             return 'fixed'
@@ -404,7 +407,7 @@ class Keithley_2400(Instrument):
             'sweep'
         '''
         logging.debug('Getting current sourcing mode.')
-        reply = self._visainstrument.ask('SOUR:CURR:MODE?')
+        reply = self._visainstrument.query('SOUR:CURR:MODE?')
         if reply == 'FIX':
             logging.info('Current sourcing mode of %s is fixed.' % self.get_name())
             return 'fixed'
@@ -500,7 +503,7 @@ class Keithley_2400(Instrument):
         Get current compliance in amps
         '''
         logging.debug('Get current compliance.')
-        return self._visainstrument.ask(':SENS:CURR:PROT:LEV?')
+        return self._visainstrument.query(':SENS:CURR:PROT:LEV?')
 
     def do_set_voltage_compliance(self, compliance):
         '''
@@ -519,14 +522,14 @@ class Keithley_2400(Instrument):
         Get voltage compliance in volts
         '''
         logging.debug('Get voltage compliance.')
-        return self._visainstrument.ask(':SENS:VOLT:PROT:LEV?')
+        return self._visainstrument.query(':SENS:VOLT:PROT:LEV?')
 
     def do_get_source_voltage(self):
         '''
         Get the voltage for the voltage source mode.
         '''
         logging.debug('Get source voltage.')
-        return float(self._visainstrument.ask(':SOUR:VOLT:LEV:AMPL?'))
+        return float(self._visainstrument.query(':SOUR:VOLT:LEV:AMPL?'))
 
     def do_set_source_voltage(self, V):
         '''
@@ -538,14 +541,14 @@ class Keithley_2400(Instrument):
         '''
         logging.debug("Set source voltage of %s to %.3e V." %(self.get_name(), V))
         self._visainstrument.write(':SOUR:VOLT:LEV %e' % V)
-        self._visainstrument.read() # to update the display
+        #self._visainstrument.read() # to update the display
         
     def do_get_source_current(self):
         '''
         Get the current for the voltage source mode.
         '''
         logging.debug('Get source current.')
-        return float(self._visainstrument.ask(':SOUR:CURR:LEV:AMPL?'))  
+        return float(self._visainstrument.query(':SOUR:CURR:LEV:AMPL?'))  
 
     def do_set_source_current(self, I):
         '''
@@ -564,7 +567,7 @@ class Keithley_2400(Instrument):
         Get the voltage range for the voltage source mode.
         '''
         logging.debug('Getting the source voltage range of %s.' % self.get_name())
-        return self._visainstrument.ask(':SOUR:VOLT:RANG?')
+        return self._visainstrument.query(':SOUR:VOLT:RANG?')
 
     def do_set_source_voltage_range(self, voltage_range):
         '''
@@ -575,7 +578,7 @@ class Keithley_2400(Instrument):
             logging.warning('Can not change the voltage range because the source voltage is larger than the voltage range.')
             raise Warning('Source voltage is larger than the given voltage range. Change the source voltage first.')
         self._visainstrument.write(':SOUR:VOLT:RANG %f' %voltage_range)
-        self.get_source_voltage_range() # Ask for the range that the source meter chose.
+        self.get_source_voltage_range() # query for the range that the source meter chose.
         
     def do_get_output_state(self):
         '''
@@ -584,7 +587,7 @@ class Keithley_2400(Instrument):
         Instrument responds with 1 or 0
         Function returns True or False
         '''
-        status = self._visainstrument.ask('OUTP:STAT?')
+        status = self._visainstrument.query('OUTP:STAT?')
         logging.debug('Get output status: ' + status)
         return bool(int(status))
 
@@ -617,7 +620,7 @@ class Keithley_2400(Instrument):
             3 : 'resistance',
             4 : 'timestamp',
             5 : 'statusword'}
-        data = self._visainstrument.ask(':READ?').split(',')
+        data = self._visainstrument.query(':READ?').split(',')
         logging.debug(__name__ + ' : Read output values from instrument')
         if type(value) == int:
             if data[value-1][-4:] == 'E+37':
@@ -647,7 +650,7 @@ class Keithley_2400(Instrument):
         self._visainstrument.write(':SENS:FUNC "CURR"')
         self._visainstrument.write(':FORM:ELEM CURR')
         if self.get_output_state():
-            return self._visainstrument.ask(':READ?')
+            return self._visainstrument.query(':READ?')
         else:
             logging.warning('Trying to read current of %s while the output is off.' % self.get_name())
 #            raise Warning('Trying to read current of %s while its output is off.' % self.get_name()) 
@@ -658,7 +661,7 @@ class Keithley_2400(Instrument):
         Get the current measurement range from the sense subsystem.
         '''
         logging.debug('Getting the current measurement range of %s.' % self.get_name())
-        return self._visainstrument.ask(':SENS:CURR:RANG:UPP?')				
+        return self._visainstrument.query(':SENS:CURR:RANG:UPP?')				
             
     def do_get_voltage_reading(self):
         '''
@@ -669,7 +672,7 @@ class Keithley_2400(Instrument):
         self.enable_measure_function(1)
         self._visainstrument.write(':FORM:ELEM VOLT')
         if self.get_output_state():
-            return self._visainstrument.ask(':READ?')
+            return self._visainstrument.query(':READ?')
         else:
             logging.warning('Trying to read voltage of %s while the output is off.' % self.get_name())
 #            raise Warning('Trying to read current of %s while its output is off.' % self.get_name()) 
@@ -680,7 +683,7 @@ class Keithley_2400(Instrument):
         Get the voltage measurement range from the sense subsystem.
         '''
         logging.debug('Getting the voltage measurement range of %s.' % self.get_name())
-        return self._visainstrument.ask(':SENS:VOLT:RANG:UPP?')	
+        return self._visainstrument.query(':SENS:VOLT:RANG:UPP?')	
 
     def do_set_voltage_measurement_range(self, value):
         '''
@@ -696,16 +699,16 @@ class Keithley_2400(Instrument):
         '''
         Get the message displayed on the top of the display.
         '''
-        return self._visainstrument.ask(':DISP:WINDow1:DATA?').replace('\x10','μ')        
+        return self._visainstrument.query(':DISP:WINDow1:DATA?').replace('\x10','μ')        
 
     def do_get_display_bottom(self):
         '''
         Get the message displayed on the bottom of the display.
         '''
-        return self._visainstrument.ask(':DISP:WINDow2:DATA?').replace('\x10','μ')    	
+        return self._visainstrument.query(':DISP:WINDow2:DATA?').replace('\x10','μ')    	
 
     def do_get_concurrent_measurements(self):
-        answer = self._visainstrument.ask(':SENS:FUNC:CONC?')
+        answer = self._visainstrument.query(':SENS:FUNC:CONC?')
         return bool(int(answer))
         
     def do_set_concurrent_measurements(self, enabled):
@@ -719,13 +722,13 @@ class Keithley_2400(Instrument):
             self._visainstrument.write(':SENS:FUNC:CONC OFF')
 		
     def do_get_concurrent_measurement_functions(self):
-        return self._visainstrument.ask(':SENS:FUNC:ON?')
+        return self._visainstrument.query(':SENS:FUNC:ON?')
 
     def do_get_4_wire_mode(self):
         '''
         Get whether the instrument is in 4-wire mode.
         '''
-        return bool(int(self._visainstrument.ask(':SYST:RSEN?')))
+        return bool(int(self._visainstrument.query(':SYST:RSEN?')))
 
     def do_set_4_wire_mode(self, mode):
         '''
@@ -741,7 +744,7 @@ class Keithley_2400(Instrument):
         Get the number of digits that the display is showing.
         '''
         logging.debug(__name__ + ' : Get the number of digits on the display')
-        return int(self._visainstrument.ask('DISP:DIG?'))
+        return int(self._visainstrument.query('DISP:DIG?'))
 
     def do_set_digits(self, dig):
         '''
@@ -766,7 +769,7 @@ class Keithley_2400(Instrument):
         OTHER:       any PLC value, display resolution is not changed
         '''
         logging.debug(__name__ + ' : Get the integration rate.')
-        return float(self._visainstrument.ask(':SENS:VOLT:NPLC?') )
+        return float(self._visainstrument.query(':SENS:VOLT:NPLC?') )
 
     def do_set_integration_rate(self, rate):
         '''
@@ -793,7 +796,7 @@ class Keithley_2400(Instrument):
         drift, see page A-7 of the manual.
         '''
         logging.debug(__name__ + ' : Get whether the auto zero is on or off.')
-        answer = self._visainstrument.ask(':SYST:AZER:STAT?')
+        answer = self._visainstrument.query(':SYST:AZER:STAT?')
         if answer == '1':
             return True
         elif answer == '0':
@@ -818,7 +821,7 @@ class Keithley_2400(Instrument):
         Get the line frequency.
         '''
         logging.debug(__name__ + ' : Get the line frequency.')
-        return float(self._visainstrument.ask(':SYST:LFR?'))  
+        return float(self._visainstrument.query(':SYST:LFR?'))  
 
     def beep(self, freq=500, length=1):
         '''
@@ -833,7 +836,7 @@ class Keithley_2400(Instrument):
 
         Returns a numpy array
         '''
-        n_readings = int(self._visainstrument.ask(':TRAC:POIN:ACT?'))
+        n_readings = int(self._visainstrument.query(':TRAC:POIN:ACT?'))
         logging.info('Number of stored readings in buffer: %i' % 
                         n_readings)
         trace = zeros(int(n_readings))
@@ -841,7 +844,7 @@ class Keithley_2400(Instrument):
             return trace
         else:
             self._visainstrument.timeout = 4
-            trace_data = self._visainstrument.ask(':TRAC:DATA?')
+            trace_data = self._visainstrument.query(':TRAC:DATA?')
         self._visainstrument.timeout = 1
         trace = fromstring(trace_data, sep=',')
         return trace
@@ -862,7 +865,7 @@ class Keithley_2400(Instrument):
         '''
         Get the source of the trigger.
         '''
-        trigger_source = self._visainstrument.ask(':TRIG:SOUR?')
+        trigger_source = self._visainstrument.query(':TRIG:SOUR?')
         if trigger_source == 'IMM':
             return 'immediate'
         elif trigger_source == 'TLIN':
@@ -888,7 +891,7 @@ class Keithley_2400(Instrument):
         '''
         Get the source of the arm subroutine
         '''
-        arm_source = self._visainstrument.ask(':ARM:SOUR?')
+        arm_source = self._visainstrument.query(':ARM:SOUR?')
         if arm_source == 'IMM':
             return 'immediate'
         elif arm_source == 'TLIN':
@@ -932,7 +935,7 @@ class Keithley_2400(Instrument):
     def do_get_arm_count(self):
         '''
         '''
-        arm_count = int(self._visainstrument.ask(':ARM:COUN?'))
+        arm_count = int(self._visainstrument.query(':ARM:COUN?'))
         return arm_count
 
     def do_set_arm_count(self, arm_count):
@@ -955,7 +958,7 @@ class Keithley_2400(Instrument):
     def read_error_queue(self):
         '''
         '''
-        return self._visainstrument.ask(':SYST:ERR?')
+        return self._visainstrument.query(':SYST:ERR?')
 
 #    def store_buffer_readings(self, count):
 #        '''
@@ -975,7 +978,7 @@ class Keithley_2400(Instrument):
     def do_get_buffer_size(self):
         '''
         '''
-        buffer_size = int(self._visainstrument.ask('TRAC:POIN?'))
+        buffer_size = int(self._visainstrument.query('TRAC:POIN?'))
         return buffer_size
 
     def do_set_buffer_size(self, buffer_size):

@@ -1,7 +1,5 @@
-# Keithley_2230.py driver for Keithley 2230 power supply
+# Keysight_E3633A.py driver for Keysight E3633A power supply
 #
-# Sam Hile <samhile@gmail.com>
-# Daniel Widmann <>
 # Gabriele de Boo <ggdeboo@gmail.com>
 #
 # This program is free software; you can redistribute it and/or modify
@@ -22,34 +20,22 @@ from instrument import Instrument
 import visa
 import types
 import logging
-import numpy
-import re
-
 import qt
 
-def bool_to_str(val):
+class Keysight_E3633A(Instrument):
     '''
-    Function to convert boolean to 'ON' or 'OFF'
-    '''
-    if val == True:
-        return "ON"
-    else:
-        return "OFF"
-
-class Keithley_2230(Instrument):
-    '''
-    This is the driver for the Keithley 2230 Programmable Power Supply
+    This is the driver for the Keysight E3633A power supply
 
     Usage:
     Initialize with
-    <name> = instruments.create('<name>', 'Keithley_2230',
+    <name> = instruments.create('<name>', 'Keysight_E3633A',
         address='<GBIP address>',
         reset=<bool>)
     '''
 
     def __init__(self, name, address, reset=False):
         '''
-        Initializes the Keithley_2230, and communicates with the wrapper.
+        Initializes the Keithley E3633A power supply
 
         Input:
             name (string)           : name of the instrument
@@ -59,7 +45,8 @@ class Keithley_2230(Instrument):
             None
         '''
         # Initialize wrapper functions
-        logging.info('Initializing instrument Keithley_2230')
+        logging.info('Initializing instrument Keysight E3633A on {0}'.format(
+            address))
         Instrument.__init__(self, name, tags=['physical', 'measure'])
 
         # Add some global constants
@@ -71,43 +58,39 @@ class Keithley_2230(Instrument):
         # Add parameters to wrapper
         self.add_parameter('voltage',
             flags=Instrument.FLAG_GETSET,
-            units='V', minval=0, maxval=30, type=types.FloatType, 
-            channels=(1,2,3))
+            units='V', minval=0.0, maxval=8.0, type=types.FloatType, 
+            )
         self.add_parameter('voltage_reading',
             flags=Instrument.FLAG_GET,
-            units='V', minval=0, maxval=30, type=types.FloatType, 
-            channels=(1,2,3))
+            units='V', type=types.FloatType, 
+            )
         self.add_parameter('current',
             flags=Instrument.FLAG_GETSET,
-            units='A', minval=0, maxval=5, type=types.FloatType, 
-            channels=(1,2,3))
+            units='A', minval=0.0, maxval=22.0, type=types.FloatType, 
+            )
         self.add_parameter('current_reading',
             flags=Instrument.FLAG_GET,
-            units='A', minval=0, maxval=5, type=types.FloatType, 
-            channels=(1,2,3))
+            units='A', type=types.FloatType, 
+            )
         self.add_parameter('active',
             flags=Instrument.FLAG_GETSET,
-            type=types.BooleanType, channels=(1,2,3))
+            type=types.BooleanType)
 #        self.add_parameter('remote_status',
 #            flags=Instrument.FLAG_GETSET,
 #            type=types.BooleanType)
         # Add functions to wrapper
 
-        self.set_parameter_bounds('voltage3', 0, 6)
-        self.set_parameter_bounds('current1', 0, 1.5)
-        self.set_parameter_bounds('current2', 0, 1.5)
 
         self.add_function('reset')
         self.add_function('get_all')
         self.add_function('set_remote')
-
+        self.add_function('ramp_current')
 
 
         if reset:
             self.reset()
         else:
-            pass#self.get_all()
-
+            self.get_all()
 
 # --------------------------------------
 #           functions
@@ -127,8 +110,6 @@ class Keithley_2230(Instrument):
         self._visainstrument.write('*RST')
         self.get_all()
 
-
-
     def get_all(self):
         '''
         Reads all relevant parameters from instrument
@@ -140,43 +121,34 @@ class Keithley_2230(Instrument):
             None
         '''
         logging.info('Get all relevant data from device')
-        self.get_active1()
-        self.get_active2()
-        self.get_active3()
-        self.get_voltage1()
-        self.get_voltage2()
-        self.get_voltage3()
-        self.get_voltage_reading1()
-        self.get_voltage_reading2()
-        self.get_voltage_reading3()
-        self.get_current_reading1()        
-        self.get_current_reading2()        
-        self.get_current_reading3()        
+        self.get_active()
+        self.get_voltage()
+        self.get_current()
+        self.get_voltage_reading()
+        self.get_current_reading()        
 
-
-########
-
-
-    def do_get_voltage(self,channel):
+    def do_get_voltage(self):
         '''
         Get voltage for a specified channel
             in: ch - channel number
             out: voltage [Volts]
         '''
         logging.debug('Getting voltage from instrument')
-        self._visainstrument.write('INST:SEL CH%d' % channel)
-        return self._visainstrument.query('SOUR:VOLTAGE?')
+        response = self._visainstrument.query('APPL?').strip('"')
+        voltage = float(response.split(',')[0])
+        return voltage
 
-    def do_get_voltage_reading(self,channel):
+    def do_get_voltage_reading(self):
         '''
-        Get voltage for a specified channel
-            in: ch - channel number
+        Get voltage reading
+            in:
             out: voltage [Volts]
         '''
-        logging.debug('Getting voltage from instrument')
-        return self._visainstrument.query('MEAS:VOLT? CH%d' % channel)
+        logging.debug(__name__ + ': Getting measured voltage from instrument')
+        response = self._visainstrument.query('MEAS:VOLT?')
+        return float(response)
 
-    def do_set_voltage(self,v,channel):
+    def do_set_voltage(self,v):
         '''
         Get voltage for a specified channel
             in: ch - channel number
@@ -184,71 +156,107 @@ class Keithley_2230(Instrument):
             out: none
         '''
         logging.debug('Sending voltage to instrument')
-        self._visainstrument.write('INST:SEL CH%d' % channel)
-        self._visainstrument.write('SOUR:VOLT %.3fV' % v)
-#        self._visainstrument.write('SOUR:APP CH%d,%fV' % (channel,v))
+        self._visainstrument.write('VOLT {0:.3f}'.format(v))
         return
 
-    def do_get_current(self, channel):
+    def do_get_current(self):
         '''
-        Get current for a specified channel
-            in: ch - channel number
+        Get current for a specified 
+            in: 
             out: current [A]
         '''
         logging.debug(__name__ + ': Getting current from instrument')
-        self._visainstrument.write('INST:SEL CH%d' % channel)
-        return self._visainstrument.query('SOUR:CURR?')
+        response = self._visainstrument.query('APPL?').strip('"')
+        voltage = float(response.split(',')[1])
+        return voltage
 
-    def do_set_current(self, I, channel):
+    def do_set_current(self, I):
         '''
         Set current for a specified channel
             in: ch - channel number
             out: current [A]
         '''
         logging.debug(__name__ + ': Setting current to %.3f' % I)
-        self._visainstrument.write('INST:SEL CH%d' % channel)
-        self._visainstrument.write('SOUR:CURR %.3fA' % I)
+        self._visainstrument.write('CURR {0:.3f}'.format(I))
+
         return
 
-    def do_get_current_reading(self, channel):
+    def do_get_current_reading(self):
         '''
-        Get current reading for a specified channel
-            in: ch - channel number
+        Get current reading for a specified 
+            in: 
             out: 
         '''
         logging.debug(__name__ + ': Getting current from instrument')
-        return self._visainstrument.query('MEAS:CURR? CH%d' % channel)
+        response = self._visainstrument.query('MEAS:CURR?')
+        return float(response)
         
-    def do_get_active(self,channel):
+    def do_get_active(self):
         '''
-        Get voltage for a specified channel
-            in: ch - channel number
+        Get whether the output is on or off
+            in:
             out: active_status [Boolean]
         '''
         logging.debug('Getting active status from instrument')
-        self._visainstrument.write('INST:SEL CH%d' % channel)
-        answer = self._visainstrument.query('CHAN:OUTP?')
-        if answer == '1':
+        response = self._visainstrument.query('OUTPUT:STATE?')
+        if response == '1':
             return True
-        elif answer =='0':
+        elif response =='0':
             return False
         else:
-            logging.warning(__name__ + ': responded with unexpected answer: %s' % answer)
+            logging.warning('{0}: responded with unexpected answer: {1}'.format(
+                __name__, response))
 
-    def do_set_active(self,a,channel):
+    def do_set_active(self,a):
         '''
         Get voltage for a specified channel
-            in: ch - channel number
+            in:
                 a - active_status [Boolean]
             out: none
         '''
         logging.debug('Sending active status to instrument')
-        self._visainstrument.write('INST:SEL CH%d' % channel)
-        self._visainstrument.write('CHAN:OUTP %s' % bool_to_str(a))
-        return
+        if a == False :
+            self._visainstrument.write('OUTP OFF')
+            return True
+        elif a == True :
+            self._visainstrument.write('OUTP ON')
+            return True
+
+    def ramp_current(self,I):
+        '''
+        Ramp to set current
+        '''
+        logging.debug(__name__+ 'Ramping current to %.3f' % I)
+        rate = 0.01 #A/20ms
+        I_init = self.do_get_current_reading()
+        if I_init < I:
+            I_set = I_init+rate
+            while I-I_set > 0.1:  
+                self._visainstrument.write('CURR %.3f' % (I_set))
+                qt.msleep(0.02)
+                I_set += rate
+            self._visainstrument.write('CURR %.3f' % I)
+            qt.msleep(0.02)
+            return True
+
+        else:
+            I_set = I_init-rate
+            while I_set-I > 0.1:  
+                self._visainstrument.write('CURR %.3f' % (I_set))
+                qt.msleep(0.02)
+                I_set -= rate
+            self._visainstrument.write('CURR %.3f' % I)
+            qt.msleep(0.02)
+            return True
+
+    def zero(self):
+        '''
+        Ramp voltage and current to zero and turn off output
+        '''
+        self.ramp_current(0.0)
+        self.do_set_voltage(0.0)
+        self.do_set_active(False)
+        return True
 
     def set_remote(self):
         self._visainstrument.write('SYST:REM')
-
-
-

@@ -1,4 +1,4 @@
-# OxfordInstruments_PS120.py class, to perform the communication between the Wrapper and the device
+# OxfordInstruments_PS120.py 
 # Guenevere Prawiroatmodjo <guen@vvtp.tudelft.nl>, 2009
 # Pieter de Groot <pieterdegroot@gmail.com>, 2009
 # Gabriele de Boo <ggdeboo@gmail.com>, 2015
@@ -22,6 +22,8 @@ from time import time, sleep
 import visa
 import types
 import logging
+
+rm = visa.ResourceManager()
 
 class OxfordInstruments_PS120(Instrument):
     '''
@@ -57,11 +59,12 @@ class OxfordInstruments_PS120(Instrument):
 
         self._address = address
 #        self._number = number
-        self._visainstrument = visa.SerialInstrument(self._address)
+        self._visainstrument = rm.open_resource(self._address)
         self._values = {}
-        self._visainstrument.stop_bits = 2
-        self._visainstrument.term_chars = '\r'
-        self._visainstrument.timeout = 0.5
+        self._visainstrument.stop_bits = visa.constants.StopBits.two
+        self._visainstrument.write_termination = '\r'
+        self._visainstrument.read_termination = '\r'
+        self._visainstrument.timeout = 500
 
         #Add parameters
         self.add_parameter('mode', type=types.IntType,
@@ -99,7 +102,7 @@ class OxfordInstruments_PS120(Instrument):
             flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET)
         self.add_parameter('field_setpoint', type=types.FloatType,
             flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET,
-            minval=0, maxval=8,
+            minval=0, maxval=8.01,
             units='T')
         self.add_parameter('sweeprate_field', type=types.FloatType,
             flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET,
@@ -107,7 +110,7 @@ class OxfordInstruments_PS120(Instrument):
             units='T/min')
         self.add_parameter('current_setpoint', type=types.FloatType,
             flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET,
-            minval=-90.93, maxval=90.93,
+            minval=-94.10, maxval=94.10,
             units='A')
         self.add_parameter('sweeprate_current', type=types.FloatType,
             flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET,
@@ -162,8 +165,6 @@ class OxfordInstruments_PS120(Instrument):
             flags=Instrument.FLAG_GET)
         self.add_parameter('trip_field', type=types.FloatType,
             flags=Instrument.FLAG_GET)
-        self.add_parameter('heater_current', type=types.FloatType,
-            flags=Instrument.FLAG_GET)
 
         # Add functions
         self.add_function('get_all')
@@ -197,7 +198,6 @@ class OxfordInstruments_PS120(Instrument):
         self.get_trip_current()
         self.get_persistent_field()
         self.get_trip_field()
-        self.get_heater_current()
         self.get_mode()
         self.get_activity()
         self.get_polarity()
@@ -391,7 +391,7 @@ class OxfordInstruments_PS120(Instrument):
         '''
         logging.debug(__name__ + ' : Read output current')
         result = self._execute('R0')
-        return float(result.replace('R',''))
+        return float(result.replace('R',''))/100.0
 
     def do_get_voltage(self):
         '''
@@ -573,7 +573,7 @@ class OxfordInstruments_PS120(Instrument):
         '''
         logging.debug(__name__ + ' : Read persistent magnet current')
         result = self._execute('R16')
-        return float(result.replace('R',''))
+        return float(result.replace('R',''))/100.0
 
     def do_get_trip_current(self):
         '''
@@ -616,21 +616,6 @@ class OxfordInstruments_PS120(Instrument):
         logging.debug(__name__ + ' : Read trip field')
         result = self._execute('R19')
         return float(result.replace('R',''))
-
-    def do_get_heater_current(self):
-        '''
-        Return switch heater current
-
-        Input:
-            None
-
-        Output:
-            result (float) : switch heater current in milliAmp
-        '''
-        logging.debug(__name__ + ' : Read switch heater current')
-        result = self._execute('R20').rstrip('H')
-        return int(result.replace('R',''))
-
 
     def do_get_activity(self):
         '''
@@ -869,6 +854,11 @@ True
         '''
         created by Joost and Markus
         Set polarity of the field
+
+            0 : No action
+            1 : Set positive current
+            2 : Set negative current
+            4 : swap polarity
         '''
         status = {
                 0 : "No action",
